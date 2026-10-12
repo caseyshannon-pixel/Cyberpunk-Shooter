@@ -21,19 +21,29 @@ export class PauseState implements GameState {
     private readonly play: PlayState,
     private readonly reason?: string,
   ) {
+    const zen = play.world.zen;
     this.menu = new Menu(
       game,
       [
         { label: 'RESUME', run: () => this.resume() },
         { label: 'SETTINGS', run: () => game.push(new SettingsState(game)) },
         { label: 'CONTROLS', run: () => game.push(new ControlsState(game)) },
-        {
-          label: 'RESTART',
-          run: () => {
-            this.play.reset();
-            this.resume();
-          },
-        },
+        zen
+          ? {
+              // Zen has no death, so the player decides when a session ends.
+              label: 'END SESSION',
+              run: () => {
+                game.pop();
+                this.play.endSession();
+              },
+            }
+          : {
+              label: 'RESTART',
+              run: () => {
+                this.play.reset();
+                this.resume();
+              },
+            },
         { label: 'QUIT TO TITLE', run: () => game.transition(() => new TitleState(game)) },
       ],
       { y: VIEW.height / 2 - 30, spacing: 44 },
@@ -72,7 +82,7 @@ export class PauseState implements GameState {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
 
-    glowText(ctx, 'PAUSED', W / 2, H / 2 - 150, { size: 56, color: COLORS.white, glow: COLORS.magenta, blur: 24, align: 'center', alpha: fade });
+    glowText(ctx, this.play.world.zen ? 'ZEN · PAUSED' : 'PAUSED', W / 2, H / 2 - 150, { size: 56, color: COLORS.white, glow: COLORS.magenta, blur: 24, align: 'center', alpha: fade });
     if (this.reason) {
       const blink = 0.6 + Math.sin(this.age * 5) * 0.4;
       glowText(ctx, this.reason, W / 2, H / 2 - 100, { size: 16, color: COLORS.magenta, align: 'center', alpha: fade * blink });

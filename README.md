@@ -2,7 +2,7 @@
 
 A cyberpunk top-down **twin-stick shooter** for the browser. Built with **Vite + TypeScript + HTML5 Canvas** — no game engine, no image or audio files: every sprite, effect, sound and the synthwave soundtrack is generated in code.
 
-Survive escalating waves of drones, gunners, splitters and bruisers, with a **Warden** boss mech every 5 waves. Grab weapon drops and power-ups, chain kills for a score multiplier, and chase your high score.
+Survive escalating waves of drones, gunners, splitters and bruisers, with a **Warden** boss mech every 5 waves. Grab weapon drops and power-ups, chain kills for a score multiplier, and chase your high score — or switch to **Zen mode** and just flow.
 
 Plays with a **controller**, **keyboard & mouse**, or **touch** (iPhone / iPad / Android) — and switches between them on the fly.
 
@@ -109,6 +109,18 @@ Runs in **Safari 14+** on iOS, iPadOS and macOS (and any current Chrome / Edge /
 - You have **5 hits**. Dashing gives brief invulnerability — dash *through* bullets.
 - **Combo:** every 5 kills in a chain raises the score multiplier (up to ×8). Stop killing for 2.6 s and it starts dropping a level at a time; getting hit resets it.
 - Game over saves your **high score** (shown on the title screen).
+
+### Zen mode
+
+Pick **ZEN MODE** on the title screen for a relaxed, no-fail session:
+
+- **You can't be hurt** — a hit just shoves you back and breaks your combo. No health bar; the HUD shows your session time instead.
+- **No waves, banners or bosses** — enemies trickle in continuously. The arena's population slowly **breathes** (rises and falls over an ~80 s cycle, starting quiet) and creeps up gently over time, with a cap. New enemy types join every 45 s.
+- Weapons, Overclock and EMP drop a little more often; Health Chips and Shields don't drop (you don't need them).
+- Calm soundtrack (pads and bass, no drums), half-strength screen shake.
+- End whenever you like: **Pause → End Session** shows your time, kills and score. Zen keeps its **own best score**.
+
+All Zen tuning lives in `CONFIG.zen` in [`src/config.ts`](src/config.ts).
 
 ### Enemies
 
@@ -243,7 +255,7 @@ src/
                      effects (beams/bolts), floating popups, obstacle steering
   render/            cached background/grid/walls, CRT overlay, sprite cache
   audio/             Web Audio engine, synthesized SFX, procedural synthwave music
-  states/            title, play, pause, settings, controls, game over
+  states/            title, play (Arcade or Zen), pause, settings, controls, game over / session summary
   ui/                HUD, touch HUD, menus, button prompts, text, toasts
 ```
 

@@ -8,7 +8,7 @@ import { WEAPONS } from '../weapons/definitions';
 import { TAU } from '../core/math';
 import type { World } from '../world/world';
 import { renderPrompts, type PromptEntry } from './prompts';
-import { font, glowText } from './text';
+import { font, formatTime, glowText } from './text';
 import { VIEW } from '../core/view';
 
 const GAMEPLAY_PROMPTS_PAD: PromptEntry[] = [
@@ -34,7 +34,29 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
   const H = VIEW.height;
   const player = world.player;
 
-  // Health pips (top-left).
+  if (world.zen) {
+    // Zen: no health to track — show the mode and how long you've been flowing.
+    glowText(ctx, 'ZEN', 48, 20, { size: 16, color: COLORS.cyan, blur: 10 });
+    glowText(ctx, formatTime(world.time), 96, 20, { size: 15, color: COLORS.white, blur: 4 });
+  } else {
+    renderHealth(ctx, world);
+  }
+
+  renderScore(ctx, world);
+  renderBossBar(ctx, world);
+
+  const weaponLeft = renderWeapon(ctx, player);
+  renderBuffs(ctx, player, weaponLeft - 26);
+
+  // Control prompts (bottom). Touch players get the on-screen controls instead.
+  if (input.device === 'touch') return;
+  const prompts = input.device === 'gamepad' ? GAMEPLAY_PROMPTS_PAD : GAMEPLAY_PROMPTS_KB;
+  renderPrompts(ctx, player.arsenal.slots.length > 1 ? [...prompts, SWAP_PROMPT] : prompts, input, W / 2, H - 20, 'center', 12, 0.75);
+}
+
+/** Health pips + wave number (top-left). */
+function renderHealth(ctx: CanvasRenderingContext2D, world: World): void {
+  const player = world.player;
   ctx.save();
   for (let i = 0; i < player.maxHealth; i++) {
     const x = 56 + i * 22;
@@ -62,17 +84,6 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
   if (world.waves.wave > 0) {
     glowText(ctx, `WAVE ${world.waves.wave}`, 56 + player.maxHealth * 22 + 10, 20, { size: 14, color: COLORS.purple, blur: 6 });
   }
-
-  renderScore(ctx, world);
-  renderBossBar(ctx, world);
-
-  const weaponLeft = renderWeapon(ctx, player);
-  renderBuffs(ctx, player, weaponLeft - 26);
-
-  // Control prompts (bottom). Touch players get the on-screen controls instead.
-  if (input.device === 'touch') return;
-  const prompts = input.device === 'gamepad' ? GAMEPLAY_PROMPTS_PAD : GAMEPLAY_PROMPTS_KB;
-  renderPrompts(ctx, player.arsenal.slots.length > 1 ? [...prompts, SWAP_PROMPT] : prompts, input, W / 2, H - 20, 'center', 12, 0.75);
 }
 
 /** Dash cooldown arc drawn around the player while recharging. */

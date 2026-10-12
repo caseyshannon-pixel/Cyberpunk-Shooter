@@ -2,13 +2,16 @@ import { COLORS, CONFIG } from '../config';
 import { storage } from '../core/storage';
 import type { Game } from '../game';
 import { Menu } from '../ui/menu';
-import { glowText } from '../ui/text';
+import { formatTime, glowText } from '../ui/text';
 import type { PlayState } from './play';
 import type { GameState } from './state';
 import { TitleState } from './title';
 import { VIEW } from '../core/view';
 
-/** Shown over the frozen arena after the player dies. Saves the high score. */
+/**
+ * Shown over the frozen arena when a run ends: after dying (Arcade) or when a
+ * Zen session is ended from the pause menu. Saves the mode's best score.
+ */
 export class GameOverState implements GameState {
   readonly overlay = true;
   private age = 0;
@@ -21,14 +24,16 @@ export class GameOverState implements GameState {
     private readonly play: PlayState,
   ) {
     const score = play.world.score.score;
-    const prev = storage.getNumber(CONFIG.score.storageKey, 0);
+    // Arcade and Zen keep separate bests.
+    const key = play.world.zen ? CONFIG.zen.storageKey : CONFIG.score.storageKey;
+    const prev = storage.getNumber(key, 0);
     this.isNewBest = score > prev;
     this.best = Math.max(prev, score);
-    if (this.isNewBest) storage.set(CONFIG.score.storageKey, String(score));
+    if (this.isNewBest) storage.set(key, String(score));
     this.menu = new Menu(
       game,
       [
-        { label: 'RETRY', run: () => this.retry() },
+        { label: play.world.zen ? 'NEW SESSION' : 'RETRY', run: () => this.retry() },
         { label: 'MAIN MENU', run: () => game.transition(() => new TitleState(game)) },
       ],
       { y: VIEW.height / 2 + 150, spacing: 44 },
@@ -37,7 +42,7 @@ export class GameOverState implements GameState {
 
   enter(): void {
     this.game.audio.music.stop();
-    this.game.audio.sfx.play('gameOver');
+    this.game.audio.sfx.play(this.play.world.zen ? 'waveClear' : 'gameOver');
   }
 
   private retry(): void {
@@ -63,12 +68,16 @@ export class GameOverState implements GameState {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
 
-    const glitch = this.age < 0.6 ? (Math.random() - 0.5) * 14 : 0;
-    glowText(ctx, 'FLATLINED', W / 2 + glitch, H / 2 - 140, { size: 64, color: COLORS.white, glow: COLORS.red, blur: 26, align: 'center', alpha: fade });
+    if (w.zen) {
+      glowText(ctx, 'SESSION COMPLETE', W / 2, H / 2 - 140, { size: 52, color: COLORS.white, glow: COLORS.cyan, blur: 26, align: 'center', alpha: fade });
+    } else {
+      const glitch = this.age < 0.6 ? (Math.random() - 0.5) * 14 : 0;
+      glowText(ctx, 'FLATLINED', W / 2 + glitch, H / 2 - 140, { size: 64, color: COLORS.white, glow: COLORS.red, blur: 26, align: 'center', alpha: fade });
+    }
 
     const rows: [string, string][] = [
       ['SCORE', w.score.score.toLocaleString('en-US')],
-      ['WAVE', String(w.waves.wave)],
+      w.zen ? ['TIME', formatTime(w.time)] : ['WAVE', String(w.waves.wave)],
       ['KILLS', String(w.score.kills)],
       ['BEST', this.best.toLocaleString('en-US')],
     ];

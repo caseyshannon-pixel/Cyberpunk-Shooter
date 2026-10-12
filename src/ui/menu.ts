@@ -7,6 +7,8 @@ import { glowText } from './text';
 export interface MenuItem {
   label: string;
   run: () => void;
+  /** Optional one-line description shown under the menu while this item is selected. */
+  hint?: string;
 }
 
 export interface MenuOptions {
@@ -120,5 +122,9 @@ export class Menu {
         alpha,
       });
     });
+    const hint = this.items[this.selected]?.hint;
+    if (hint) {
+      glowText(ctx, hint, cx, this.bottom + this.spacing * 0.95, { size: 14, color: '#a99bd1', align: 'center', alpha: alpha * 0.9, blur: 0 });
+    }
   }
 }

@@ -21,6 +21,7 @@ interface SpawnMarker {
  * spent on weighted-random enemy picks; every `bossEvery` waves a boss shows up.
  */
 export class WaveDirector {
+  /** Arcade: wave number. Zen: the current difficulty tier (which enemy types are in the mix). */
   wave = 0;
   phase: WavePhase = 'cleared';
   /** Time left in the current phase (cleared/intro). */
@@ -32,13 +33,24 @@ export class WaveDirector {
   private queue: EnemyKind[] = [];
   private spawnTimer = 0;
   private readonly pt = vec();
+  /** Zen mode: seconds of continuous flow so far. */
+  private zenTime = 0;
+
+  /** In Zen mode there are no waves: enemies trickle in continuously instead. */
+  constructor(private readonly zen = false) {
+    if (zen) {
+      this.phase = 'active';
+      this.wave = 1;
+      this.spawnTimer = 1.2;
+    }
+  }
 
   get hpScale(): number {
-    return 1 + (this.wave - 1) * W.hpScalePerWave;
+    return this.zen ? 1 : 1 + (this.wave - 1) * W.hpScalePerWave;
   }
 
   get speedScale(): number {
-    return 1 + (this.wave - 1) * W.speedScalePerWave;
+    return this.zen ? 1 : 1 + (this.wave - 1) * W.speedScalePerWave;
   }
 
   get remaining(): number {
@@ -48,6 +60,10 @@ export class WaveDirector {
   update(dt: number, w: World): void {
     this.phaseAge += dt;
     this.updateMarkers(dt, w);
+    if (this.zen) {
+      this.updateZen(dt, w);
+      return;
+    }
 
     switch (this.phase) {
       case 'cleared':
@@ -75,6 +91,47 @@ export class WaveDirector {
     }
   }
 
+  /**
+   * Zen flow: keep the arena at a target population that slowly rises and falls
+   * (a sine "breath"), creeps up over time, and unlocks enemy types gradually.
+   */
+  private updateZen(dt: number, w: World): void {
+    const Z = CONFIG.zen;
+    this.zenTime += dt;
+    this.wave = Math.min(Z.maxTier, 1 + Math.floor(this.zenTime / Z.tierSeconds));
+    const target = Math.min(
+      Z.maxAlive,
+      // -cos: the cycle starts at its quietest point and swells from there.
+      Math.max(2, Z.baseAlive - Z.aliveSwing * Math.cos((this.zenTime / Z.cyclePeriod) * TAU) + (Z.alivePerMinute * this.zenTime) / 60),
+    );
+    this.spawnTimer -= dt;
+    if (this.spawnTimer > 0) return;
+    this.spawnTimer = Z.spawnInterval;
+    if (w.enemies.length + this.markers.length >= target) return;
+    const kind = this.pickKind(this.wave, Infinity);
+    if (!kind) return;
+    this.queue = [kind];
+    this.spawnNext(w);
+  }
+
+  /** Weighted-random enemy kind among those unlocked by `wave` and costing at most `budget`. */
+  private pickKind(wave: number, budget: number): EnemyKind | null {
+    const kinds = (Object.keys(CONFIG.enemies) as EnemyKind[]).filter((k) => {
+      const d = CONFIG.enemies[k];
+      // cost > 0 keeps budget loops finite; weight 0 = never spawned by the director.
+      return d.weight > 0 && d.cost > 0 && d.minWave <= wave && d.cost <= budget;
+    });
+    if (!kinds.length) return null;
+    let total = 0;
+    for (const k of kinds) total += CONFIG.enemies[k].weight;
+    let r = Math.random() * total;
+    for (const k of kinds) {
+      r -= CONFIG.enemies[k].weight;
+      if (r <= 0) return k;
+    }
+    return kinds[0];
+  }
+
   private setPhase(phase: WavePhase): void {
     this.phase = phase;
     this.phaseAge = 0;
@@ -99,24 +156,7 @@ export class WaveDirector {
       budget = Math.round(budget * W.bossEscortBudget);
     }
 
-    const kinds = (Object.keys(CONFIG.enemies) as EnemyKind[]).filter((k) => {
-      const d = CONFIG.enemies[k];
-      return d.weight > 0 && d.minWave <= n;
-    });
-    while (budget > 0) {
-      const affordable = kinds.filter((k) => CONFIG.enemies[k].cost <= budget);
-      if (!affordable.length) break;
-      let total = 0;
-      for (const k of affordable) total += CONFIG.enemies[k].weight;
-      let r = Math.random() * total;
-      let pick = affordable[0];
-      for (const k of affordable) {
-        r -= CONFIG.enemies[k].weight;
-        if (r <= 0) {
-          pick = k;
-          break;
-        }
-      }
+    for (let pick = this.pickKind(n, budget); pick && budget > 0; pick = this.pickKind(n, budget)) {
       queue.push(pick);
       budget -= CONFIG.enemies[pick].cost;
     }

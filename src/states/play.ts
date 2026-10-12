@@ -3,7 +3,7 @@ import type { Game } from '../game';
 import { Action } from '../input/bindings';
 import { renderDashRing, renderHud, renderReticle, renderWaveBanner } from '../ui/hud';
 import { renderTouchHud } from '../ui/touchHud';
-import { World } from '../world/world';
+import { World, type GameMode } from '../world/world';
 import { GameOverState } from './gameover';
 import { PauseState } from './pause';
 import type { GameState } from './state';
@@ -16,13 +16,17 @@ export class PlayState implements GameState {
   private gameOverShown = false;
   private readonly unsubscribeResize: () => void;
 
-  constructor(private readonly game: Game) {
+  constructor(
+    private readonly game: Game,
+    readonly mode: GameMode = 'arcade',
+  ) {
     this.reset();
     // If the screen changes shape before the first wave starts (e.g. the page
     // loaded in portrait and the phone was then rotated), re-fit the arena.
     this.unsubscribeResize = game.display.onResize(() => {
       const w = this.world;
-      if (w.waves.wave === 0 && w.score.kills === 0 && game.display.preferredWidth() !== w.viewWidth) this.reset();
+      const fresh = w.score.kills === 0 && (w.zen ? w.time < 3 : w.waves.wave === 0);
+      if (fresh && game.display.preferredWidth() !== w.viewWidth) this.reset();
     });
   }
 
@@ -34,14 +38,19 @@ export class PlayState implements GameState {
   reset(): void {
     this.game.display.setLogicalWidth(this.game.display.preferredWidth());
     const audio = this.game.audio;
-    this.world = new World({
-      toast: (text, color) => this.game.toasts.show(text, color),
-      rumble: (s, w, ms) => this.game.input.rumble(s, w, ms),
-      sound: (name, x) => audio.sfx.play(name, x),
-      waveStarted: (_wave, boss) => audio.music.setIntensity(boss ? 2 : 1),
-    });
+    const zen = this.mode === 'zen';
+    this.world = new World(
+      {
+        toast: (text, color) => this.game.toasts.show(text, color),
+        rumble: (s, w, ms) => this.game.input.rumble(s, w, ms),
+        sound: (name, x) => audio.sfx.play(name, x),
+        waveStarted: (_wave, boss) => audio.music.setIntensity(boss ? 2 : 1),
+      },
+      this.mode,
+    );
     this.gameOverShown = false;
-    audio.music.setIntensity(1);
+    // Zen keeps the soundtrack calm: pads and bass, no drums.
+    audio.music.setIntensity(zen ? 0 : 1);
     audio.music.start();
     audio.engine.duckMusic(1);
   }
@@ -73,6 +82,13 @@ export class PlayState implements GameState {
       this.gameOverShown = true;
       this.game.push(new GameOverState(this.game, this));
     }
+  }
+
+  /** Zen: finish the session and show its summary (there's no death to end it). */
+  endSession(): void {
+    if (this.gameOverShown) return;
+    this.gameOverShown = true;
+    this.game.push(new GameOverState(this.game, this));
   }
 
   pause(reason?: string): void {

@@ -30,6 +30,7 @@ export class TitleState implements GameState {
   private phase: 'press' | 'menu' = 'press';
   private readonly menu: Menu;
   private best = 0;
+  private zenBest = 0;
   private glitch = 0;
   private readonly unsubscribeResize: () => void;
 
@@ -38,11 +39,20 @@ export class TitleState implements GameState {
     this.menu = new Menu(
       game,
       [
-        { label: 'START', run: () => game.transition(() => new PlayState(game)) },
+        {
+          label: 'START',
+          hint: 'Waves, bosses and 5 hits — chase the high score.',
+          run: () => game.transition(() => new PlayState(game, 'arcade')),
+        },
+        {
+          label: 'ZEN MODE',
+          hint: 'No damage, no bosses — an endless, calm flow. Unwind.',
+          run: () => game.transition(() => new PlayState(game, 'zen')),
+        },
         { label: 'CONTROLS', run: () => game.push(new ControlsState(game)) },
         { label: 'SETTINGS', run: () => game.push(new SettingsState(game)) },
       ],
-      { y: VIEW.height / 2 + 70, spacing: 50, size: 24 },
+      { y: VIEW.height / 2 + 56, spacing: 46, size: 24 },
     );
     ATTRACT.forEach((kind) => this.attract.push(new Enemy(kind, 0, 0)));
     this.unsubscribeResize = game.display.onResize(() => {
@@ -58,6 +68,7 @@ export class TitleState implements GameState {
 
   enter(): void {
     this.best = storage.getNumber(CONFIG.score.storageKey, 0);
+    this.zenBest = storage.getNumber(CONFIG.zen.storageKey, 0);
     const music = this.game.audio.music;
     music.setIntensity(0);
     music.start();
@@ -130,8 +141,12 @@ export class TitleState implements GameState {
       this.menu.render(ctx, 1, this.time);
     }
 
-    if (this.best > 0) {
-      glowText(ctx, `BEST  ${this.best.toLocaleString('en-US')}`, W / 2, H - 70, { size: 16, color: COLORS.yellow, align: 'center', blur: 8 });
+    const bests = [
+      this.best > 0 ? `BEST  ${this.best.toLocaleString('en-US')}` : '',
+      this.zenBest > 0 ? `ZEN BEST  ${this.zenBest.toLocaleString('en-US')}` : '',
+    ].filter(Boolean);
+    if (bests.length) {
+      glowText(ctx, bests.join('     ·     '), W / 2, H - 66, { size: 15, color: COLORS.yellow, align: 'center', blur: 8 });
     }
     glowText(ctx, 'v1.0  //  SURVIVE THE GRID', W / 2, H - 38, { size: 11, color: '#6f5f99', align: 'center', blur: 0 });
   }

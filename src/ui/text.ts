@@ -2,6 +2,15 @@ import { COLORS } from '../config';
 
 export const FONT_FAMILY = `'Consolas', 'Menlo', 'DejaVu Sans Mono', 'Courier New', monospace`;
 
+/** Seconds → "m:ss" (or "h:mm:ss" past an hour). */
+export function formatTime(seconds: number): string {
+  const s = Math.floor(seconds);
+  const h = Math.floor(s / 3600);
+  const m = Math.floor((s % 3600) / 60);
+  const ss = String(s % 60).padStart(2, '0');
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${ss}` : `${m}:${ss}`;
+}
+
 export function font(size: number, weight: 'normal' | 'bold' = 'bold'): string {
   return `${weight} ${size}px ${FONT_FAMILY}`;
 }

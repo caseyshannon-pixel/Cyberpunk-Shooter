@@ -195,6 +195,31 @@ export const CONFIG = {
     clearBonusPerWave: 250,
   },
 
+  /** Zen mode: no damage, no waves or bosses — an endless, gently breathing flow of enemies. */
+  zen: {
+    /** Seconds between spawn attempts. */
+    spawnInterval: 0.9,
+    /** Target number of enemies on screen: base ± swing over a slow cycle, creeping up over time. */
+    baseAlive: 7,
+    aliveSwing: 4,
+    cyclePeriod: 80,
+    alivePerMinute: 1,
+    maxAlive: 16,
+    /** A new enemy type joins the mix every this many seconds (in config order of minWave). */
+    tierSeconds: 45,
+    maxTier: 4,
+    /** Pickups that make no sense when you can't be hurt. */
+    excludedPickups: ['health', 'shield'],
+    /** Multiplier on enemy drop chances. */
+    dropBoost: 1.4,
+    /** Brief invulnerability + knockback after a hit (no health is lost). */
+    hitInvuln: 0.8,
+    hitKnockback: 420,
+    /** Screen-shake multiplier for a calmer feel. */
+    shakeScale: 0.5,
+    storageKey: 'neongrid.zenbest',
+  },
+
   score: {
     /** Kills needed to raise the multiplier by one. */
     killsPerLevel: 5,

@@ -23,6 +23,9 @@ import { VIEW } from '../core/view';
 
 const C = CONFIG.combat;
 
+/** Arcade: waves, bosses, health. Zen: no damage, endless calm flow (see CONFIG.zen). */
+export type GameMode = 'arcade' | 'zen';
+
 /** Side effects the world asks the outside (game/UI/audio) to perform. */
 export interface WorldHooks {
   toast(text: string, color?: string): void;
@@ -49,7 +52,7 @@ export class World implements ProjectileHost {
   readonly pickups = new PickupManager();
   readonly effects = new Effects();
   readonly score = new ScoreKeeper();
-  readonly waves = new WaveDirector();
+  readonly waves: WaveDirector;
   readonly grid: SpatialGrid<Enemy>;
 
   /** Simulation time of this run. */
@@ -67,10 +70,18 @@ export class World implements ProjectileHost {
   slowMoScale = 1;
   private readonly near: Enemy[] = [];
 
-  constructor(private readonly hooks: WorldHooks) {
+  constructor(
+    private readonly hooks: WorldHooks,
+    readonly mode: GameMode = 'arcade',
+  ) {
+    this.waves = new WaveDirector(mode === 'zen');
     const b = this.arena.bounds;
     this.grid = new SpatialGrid<Enemy>(b.x, b.y, b.w, b.h, C.spatialCell);
     this.player = new Player(this.arena.centerX, this.arena.centerY + 120);
+  }
+
+  get zen(): boolean {
+    return this.mode === 'zen';
   }
 
   get boss(): Enemy | null {
@@ -360,6 +371,11 @@ export class World implements ProjectileHost {
       return;
     }
 
+    if (this.zen) {
+      this.zenHit(dx / d, dy / d);
+      return;
+    }
+
     const fatal = p.takeHit(dx / d, dy / d);
     this.score.onPlayerHit();
     this.damageFlash = 0.35;
@@ -376,6 +392,23 @@ export class World implements ProjectileHost {
       this.hooks.rumble(1, 1, 700);
       this.setSlowMo(1.0, 0.4);
     }
+  }
+
+  /** Zen: a hit costs only your combo — a shove, a flash and a moment of invulnerability. */
+  private zenHit(nx: number, ny: number): void {
+    const p = this.player;
+    const Z = CONFIG.zen;
+    if (this.score.chain > 0) this.popups.add(p.x, p.y - 34, 'COMBO LOST', '#8c7fb0', 13, 0.9);
+    this.score.onPlayerHit();
+    p.invulnTime = Z.hitInvuln;
+    p.vx += nx * Z.hitKnockback;
+    p.vy += ny * Z.hitKnockback;
+    this.damageFlash = 0.18;
+    this.particles.burst(p.x, p.y, COLORS.cyan, 12, 60, 240, 0.2, 0.4, 2);
+    this.particles.ring(p.x, p.y, COLORS.cyan, 40, 0.3, 2);
+    this.shake(6);
+    this.hooks.rumble(0.3, 0.4, 120);
+    this.sound('shieldHit');
   }
 
   clearEnemyBullets(): void {
@@ -421,6 +454,7 @@ export class World implements ProjectileHost {
 
   /** Add screen shake; `amount` is roughly the peak offset in pixels (≈22 = maximum). */
   shake(amount: number): void {
+    if (this.zen) amount *= CONFIG.zen.shakeScale;
     this.trauma = Math.min(1, this.trauma + amount / 22);
   }
 
