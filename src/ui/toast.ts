@@ -33,7 +33,7 @@ export class Toasts {
 
   render(ctx: CanvasRenderingContext2D): void {
     const cx = CONFIG.view.width / 2;
-    let y = 72;
+    let y: number = CONFIG.ui.toastY;
     ctx.save();
     ctx.font = font(15);
     ctx.textAlign = 'center';

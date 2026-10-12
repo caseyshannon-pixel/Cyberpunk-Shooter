@@ -30,6 +30,7 @@ export class Player {
   /** True while the player is actively aiming (stick pushed / mouse) — used for the reticle. */
   aiming = false;
 
+  alive = true;
   health: number = P.maxHealth;
   maxHealth: number = P.maxHealth;
 
@@ -63,6 +64,21 @@ export class Player {
   /** 0..1, 1 = dash ready. */
   get dashReady(): number {
     return 1 - this.dashCooldown / P.dash.cooldown;
+  }
+
+  /** Apply one hit of damage from direction (nx, ny). Returns true if it was fatal. */
+  takeHit(nx: number, ny: number): boolean {
+    this.health = Math.max(0, this.health - 1);
+    this.invulnTime = P.hitInvuln;
+    this.vx += nx * P.hitKnockback;
+    this.vy += ny * P.hitKnockback;
+    if (this.health <= 0) {
+      this.alive = false;
+      this.vx = this.vy = 0;
+      this.ghosts.length = 0;
+      return true;
+    }
+    return false;
   }
 
   update(dt: number, input: Input, arena: Arena, projectiles: Projectiles): void {
@@ -145,6 +161,7 @@ export class Player {
   }
 
   render(ctx: CanvasRenderingContext2D, alpha: number, time: number): void {
+    if (!this.alive) return;
     const x = lerp(this.prevX, this.x, alpha);
     const y = lerp(this.prevY, this.y, alpha);
     const angle = lerpAngle(this.prevAimAngle, this.aimAngle, alpha);

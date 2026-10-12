@@ -1,7 +1,16 @@
 import { CONFIG } from '../config';
 import { Pool } from '../core/pool';
+import { drawOrb } from '../render/cache';
 import type { ProjectileBehavior } from '../weapons/definitions';
 import type { Arena } from '../world/arena';
+
+/** What projectiles need from the world: walls, plus hit tests against entities. */
+export interface ProjectileHost {
+  readonly arena: Arena;
+  /** Return true if the projectile hit something and should be removed. */
+  projectileHit(b: Projectile): boolean;
+  projectileWall(b: Projectile): void;
+}
 
 export type Team = 'player' | 'enemy';
 
@@ -56,8 +65,9 @@ export class Projectiles {
     return b;
   }
 
-  update(dt: number, arena: Arena): void {
+  update(dt: number, host: ProjectileHost): void {
     const pool = this.pool;
+    const arena = host.arena;
     for (let i = pool.count - 1; i >= 0; i--) {
       const b = pool.items[i];
       b.prevX = b.x;
@@ -65,7 +75,12 @@ export class Projectiles {
       b.x += b.vx * dt;
       b.y += b.vy * dt;
       b.life -= dt;
-      if (b.life <= 0 || arena.hitTestCircle(b.x, b.y, b.radius)) b.dead = true;
+      if (b.life <= 0) b.dead = true;
+      else if (host.projectileHit(b)) b.dead = true;
+      else if (arena.hitTestCircle(b.x, b.y, b.radius)) {
+        host.projectileWall(b);
+        b.dead = true;
+      }
       if (b.dead) pool.releaseAt(i);
     }
   }
@@ -86,6 +101,12 @@ export function renderProjectiles(ctx: CanvasRenderingContext2D, projectiles: Pr
     const b = pool.items[i];
     const x = b.prevX + (b.x - b.prevX) * alpha;
     const y = b.prevY + (b.y - b.prevY) * alpha;
+
+    if (b.team === 'enemy') {
+      // Enemy shots: slow, fat glowing orbs that are easy to read (cached sprite).
+      drawOrb(ctx, x, y, b.radius, b.color);
+      continue;
+    }
     // Trail length scales with speed (~1.5 ticks of travel), shorter while freshly spawned.
     const trail = Math.min(0.025, b.maxLife - b.life);
     const tx = x - b.vx * trail;

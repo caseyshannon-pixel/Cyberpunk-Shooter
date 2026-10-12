@@ -1,103 +1,107 @@
 import { COLORS, CONFIG } from '../config';
 import type { Arena } from '../world/arena';
+import { currentScale, makeLayer, type Layer } from './cache';
 
 const A = CONFIG.arena;
+const W = CONFIG.view.width;
+const H = CONFIG.view.height;
+/** The grid pattern repeats every 4 cells (every 4th line is bright). */
+const GRID_PERIOD = A.gridSize * 4;
 
-/** Scrolling neon grid floor, arena walls and obstacles. */
+let floor: Layer | null = null;
+let grid: Layer | null = null;
+
+/**
+ * Floor gradient + scrolling neon grid. Both are cached: the floor is one
+ * opaque full-view layer, and the grid is a tile one period larger than the
+ * arena that we blit with an offset to make it scroll.
+ */
 export function renderBackground(ctx: CanvasRenderingContext2D, time: number): void {
-  const W = CONFIG.view.width;
-  const H = CONFIG.view.height;
+  const scale = currentScale(ctx);
+  if (!floor || floor.scale !== scale) floor = buildFloor(scale);
+  if (!grid || grid.scale !== scale) grid = buildGrid(scale);
 
-  ctx.fillStyle = COLORS.bgDeep;
-  ctx.fillRect(0, 0, W, H);
+  ctx.drawImage(floor.canvas, 0, 0, W, H);
 
-  // Floor tint.
-  const g = ctx.createRadialGradient(W / 2, H / 2, 50, W / 2, H / 2, W * 0.7);
+  const off = (time * A.gridScroll) % GRID_PERIOD;
+  const s = grid.scale;
+  // Source rect starts one period in, minus the offset, so lines appear to move down-right.
+  const sx = (GRID_PERIOD - off) * s;
+  ctx.drawImage(grid.canvas, sx, sx, A.width * s, A.height * s, A.x, A.y, A.width, A.height);
+}
+
+function buildFloor(scale: number): Layer {
+  const layer = makeLayer(W, H, scale);
+  const c = layer.ctx;
+  c.fillStyle = COLORS.bgDeep;
+  c.fillRect(0, 0, W, H);
+  const g = c.createRadialGradient(W / 2, H / 2, 50, W / 2, H / 2, W * 0.7);
   g.addColorStop(0, '#12052a');
   g.addColorStop(1, COLORS.bgDeep);
-  ctx.fillStyle = g;
-  ctx.fillRect(A.x, A.y, A.width, A.height);
+  c.fillStyle = g;
+  c.fillRect(A.x, A.y, A.width, A.height);
+  return layer;
+}
 
-  // Grid lines, scrolling diagonally. Every 4th line is brighter.
+function buildGrid(scale: number): Layer {
+  const w = A.width + GRID_PERIOD;
+  const h = A.height + GRID_PERIOD;
+  const layer = makeLayer(w, h, scale);
+  const c = layer.ctx;
   const size = A.gridSize;
-  const off = (time * A.gridScroll) % (size * 4);
-  ctx.save();
-  ctx.beginPath();
-  ctx.rect(A.x, A.y, A.width, A.height);
-  ctx.clip();
-  ctx.lineWidth = 1;
+  c.lineWidth = 1;
   for (let pass = 0; pass < 2; pass++) {
-    ctx.strokeStyle = pass === 0 ? COLORS.grid : COLORS.gridBright;
-    ctx.globalAlpha = pass === 0 ? 0.55 : 0.5;
-    ctx.beginPath();
-    for (let i = -4; i * size < A.width + size * 4; i++) {
-      const bright = ((i % 4) + 4) % 4 === 0;
-      if (bright !== (pass === 1)) continue;
-      const x = Math.round(A.x + i * size + off) + 0.5;
-      ctx.moveTo(x, A.y);
-      ctx.lineTo(x, A.y + A.height);
+    const bright = pass === 1;
+    c.strokeStyle = bright ? COLORS.gridBright : COLORS.grid;
+    c.globalAlpha = bright ? 0.5 : 0.55;
+    c.beginPath();
+    for (let i = 0; i * size <= w; i++) {
+      if ((i % 4 === 0) !== bright) continue;
+      const x = i * size + 0.5;
+      c.moveTo(x, 0);
+      c.lineTo(x, h);
     }
-    for (let j = -4; j * size < A.height + size * 4; j++) {
-      const bright = ((j % 4) + 4) % 4 === 0;
-      if (bright !== (pass === 1)) continue;
-      const y = Math.round(A.y + j * size + off) + 0.5;
-      ctx.moveTo(A.x, y);
-      ctx.lineTo(A.x + A.width, y);
+    for (let j = 0; j * size <= h; j++) {
+      if ((j % 4 === 0) !== bright) continue;
+      const y = j * size + 0.5;
+      c.moveTo(0, y);
+      c.lineTo(w, y);
     }
-    ctx.stroke();
+    c.stroke();
   }
-  ctx.restore();
+  return layer;
 }
 
-interface ArenaCache {
-  arena: Arena;
-  scale: number;
-  canvas: HTMLCanvasElement;
-}
-let arenaCache: ArenaCache | null = null;
+let walls: { layer: Layer; arena: Arena } | null = null;
 
 /**
  * Walls and obstacles never change, and canvas shadowBlur is expensive
- * (especially in Safari on iPhone/iPad), so we draw them once into an
- * offscreen canvas at the current pixel ratio and blit that every frame.
+ * (especially in Safari on iPhone/iPad), so they're drawn once into a cached
+ * layer and blitted every frame with a slow alpha "breathing" pulse.
  */
 export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: number): void {
-  const scale = ctx.getTransform().a;
-  if (!arenaCache || arenaCache.arena !== arena || arenaCache.scale !== scale) {
-    const canvas = arenaCache?.canvas ?? document.createElement('canvas');
-    canvas.width = Math.ceil(CONFIG.view.width * scale);
-    canvas.height = Math.ceil(CONFIG.view.height * scale);
-    const c = canvas.getContext('2d');
-    if (!c) return;
-    c.setTransform(scale, 0, 0, scale, 0, 0);
-    drawArena(c, arena, scale);
-    arenaCache = { arena, scale, canvas };
+  const scale = currentScale(ctx);
+  if (!walls || walls.arena !== arena || walls.layer.scale !== scale) {
+    const layer = makeLayer(W, H, scale);
+    drawArena(layer.ctx, arena, scale);
+    walls = { layer, arena };
   }
-
-  const W = CONFIG.view.width;
-  const H = CONFIG.view.height;
-  ctx.drawImage(arenaCache.canvas, 0, 0, W, H);
-  // Slow neon "breathing": add a faint extra copy on top.
   ctx.save();
-  ctx.globalCompositeOperation = 'lighter';
-  ctx.globalAlpha = 0.18 + Math.sin(time * 2) * 0.12;
-  ctx.drawImage(arenaCache.canvas, 0, 0, W, H);
+  ctx.globalAlpha = 0.82 + Math.sin(time * 2) * 0.18;
+  ctx.drawImage(walls.layer.canvas, 0, 0, W, H);
   ctx.restore();
 }
 
 function drawArena(ctx: CanvasRenderingContext2D, arena: Arena, scale: number): void {
   const b = arena.bounds;
   // shadowBlur is in device pixels and ignores the transform; scale it so the glow matches on every DPR.
-
   ctx.save();
-  // Outer walls.
   ctx.shadowColor = COLORS.wall;
   ctx.shadowBlur = 10 * scale;
   ctx.strokeStyle = COLORS.wall;
   ctx.lineWidth = 3;
   ctx.strokeRect(b.x - 1.5, b.y - 1.5, b.w + 3, b.h + 3);
 
-  // Obstacles.
   for (const o of arena.obstacles) {
     const edge = o.kind === 'pillar' ? COLORS.obstacleEdge : COLORS.purple;
     ctx.shadowBlur = 0;

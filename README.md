@@ -2,7 +2,8 @@
 
 A cyberpunk top-down twin-stick shooter built with Vite + TypeScript + HTML5 Canvas (no engine).
 
-> Work in progress. Phase 1 (movement, aiming, shooting, dash; gamepad, keyboard/mouse and touch) is in place.
+> Work in progress. Phases 1–2 are in: movement/aim/shoot/dash on gamepad, keyboard/mouse and touch;
+> enemies (Drone, Gunner, Splitter, Bruiser, Warden boss every 5 waves), waves, score + combo, game over + high score.
 > A full README (controls, adding weapons/enemies) lands with the final phase.
 
 ```bash

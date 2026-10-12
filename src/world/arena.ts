@@ -1,5 +1,5 @@
 import { CONFIG } from '../config';
-import { circleRect, type Contact, type Rect } from '../core/collision';
+import { circleRect, segmentRect, type Contact, type Rect } from '../core/collision';
 
 export interface Obstacle extends Rect {
   kind: 'pillar' | 'crate';
@@ -79,6 +79,54 @@ export class Arena {
       }
     }
     return hit;
+  }
+
+  /** True if nothing blocks a straight line between the two points. */
+  lineOfSight(x0: number, y0: number, x1: number, y1: number): boolean {
+    for (const o of this.obstacles) if (segmentRect(x0, y0, x1, y1, o)) return false;
+    return true;
+  }
+
+  /** True if a circle at (x, y) overlaps no obstacle and sits inside the walls. */
+  isFree(x: number, y: number, r: number): boolean {
+    const b = this.bounds;
+    if (x - r < b.x || x + r > b.x + b.w || y - r < b.y || y + r > b.y + b.h) return false;
+    for (const o of this.obstacles) if (circleRect(x, y, r, o, this.contact)) return false;
+    return true;
+  }
+
+  /**
+   * Random free point near the arena edge, at least `minDist` from (avoidX, avoidY).
+   * Falls back to the farthest candidate found if none qualify.
+   */
+  spawnPoint(avoidX: number, avoidY: number, minDist: number, r: number, out: { x: number; y: number }): void {
+    const b = this.bounds;
+    const inset = r + 14;
+    let bestD = -1;
+    for (let i = 0; i < 24; i++) {
+      // Mostly near the edges (where enemies "enter"), sometimes anywhere.
+      let x: number;
+      let y: number;
+      const side = Math.floor(Math.random() * 5);
+      const u = Math.random();
+      if (side === 0) [x, y] = [b.x + inset, b.y + inset + u * (b.h - inset * 2)];
+      else if (side === 1) [x, y] = [b.x + b.w - inset, b.y + inset + u * (b.h - inset * 2)];
+      else if (side === 2) [x, y] = [b.x + inset + u * (b.w - inset * 2), b.y + inset];
+      else if (side === 3) [x, y] = [b.x + inset + u * (b.w - inset * 2), b.y + b.h - inset];
+      else [x, y] = [b.x + inset + Math.random() * (b.w - inset * 2), b.y + inset + Math.random() * (b.h - inset * 2)];
+      if (!this.isFree(x, y, r)) continue;
+      const d = Math.hypot(x - avoidX, y - avoidY);
+      if (d > bestD) {
+        bestD = d;
+        out.x = x;
+        out.y = y;
+      }
+      if (d >= minDist) return;
+    }
+    if (bestD < 0) {
+      out.x = this.centerX;
+      out.y = b.y + inset;
+    }
   }
 
   /**
