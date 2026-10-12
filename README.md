@@ -2,10 +2,10 @@
 
 A cyberpunk top-down twin-stick shooter built with Vite + TypeScript + HTML5 Canvas (no engine).
 
-> Work in progress. Phases 1–3 are in: movement/aim/shoot/dash on gamepad, keyboard/mouse and touch;
+> Work in progress. Phases 1–4 are in: movement/aim/shoot/dash on gamepad, keyboard/mouse and touch;
 > enemies (Drone, Gunner, Splitter, Bruiser, Warden boss every 5 waves), waves, score + combo, game over + high score;
-> 7 weapons (Pulse, Spread, Plasma Rail, Homing Swarm, Ricochet Disc, Arc Lightning, Nova Burst) and
-> pickups (Overclock, Shield Matrix, Health Chip, EMP). Wide screens (e.g. iPhone) get a wider arena.
+> 7 weapons and 4 pickups; procedural sound effects + synthwave music, screen shake, hit-stop, CRT overlay,
+> and a Settings screen (Pause → Settings). Wide screens (e.g. iPhone) get a wider arena.
 > A full README (controls, adding weapons/enemies) lands with the final phase.
 
 ```bash
@@ -30,6 +30,10 @@ Runs in Safari 14+ on iOS, iPadOS and macOS (and any modern Chromium/Firefox).
   launched from that icon it runs full-screen in landscape with no Safari UI.
 - **Wide screens:** the arena widens to match the screen's shape (up to ~2.2:1), so iPhones
   fill edge to edge instead of showing black bars. The width is locked when a run starts.
+
+- **Sound** starts after your first tap or key press (a browser rule). With a controller only,
+  press any key or tap once. *Settings → Sound in silent mode* chooses whether the game plays
+  when the iPhone/iPad ring switch is on silent (on by default).
 
 ### Testing on an iPhone/iPad from your computer
 

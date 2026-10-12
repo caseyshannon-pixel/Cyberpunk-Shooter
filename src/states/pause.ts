@@ -4,6 +4,7 @@ import { Action } from '../input/bindings';
 import { renderPrompts } from '../ui/prompts';
 import { glowText } from '../ui/text';
 import type { PlayState } from './play';
+import { SettingsState } from './settings';
 import type { GameState } from './state';
 import { VIEW } from '../core/view';
 
@@ -25,6 +26,7 @@ export class PauseState implements GameState {
   ) {
     this.items = [
       { label: 'RESUME', run: () => this.resume() },
+      { label: 'SETTINGS', run: () => this.game.push(new SettingsState(this.game)) },
       {
         label: 'RESTART',
         run: () => {
@@ -35,8 +37,24 @@ export class PauseState implements GameState {
     ];
   }
 
+  enter(): void {
+    this.game.audio.engine.duckMusic(0.35);
+    this.game.audio.sfx.play('uiSelect');
+  }
+
+  exit(): void {
+    this.game.audio.engine.duckMusic(1);
+  }
+
   private resume(): void {
+    this.game.audio.sfx.play('uiBack');
     this.game.pop();
+  }
+
+  private run(i: number): void {
+    this.selected = i;
+    if (this.items[i].label !== 'RESUME') this.game.audio.sfx.play('uiSelect');
+    this.items[i].run();
   }
 
   update(dt: number): void {
@@ -46,22 +64,31 @@ export class PauseState implements GameState {
     // Mouse hover and click / touch tap on menu items.
     if (input.mouseMoved && input.device === 'keyboard') {
       const hover = this.itemAt(input.mouse.x, input.mouse.y);
-      if (hover >= 0) this.selected = hover;
+      if (hover >= 0 && hover !== this.selected) {
+        this.selected = hover;
+        this.game.audio.sfx.play('uiMove');
+      }
     }
     for (const t of input.taps) {
       const hit = this.itemAt(t.x, t.y);
       if (hit >= 0) {
-        this.selected = hit;
-        this.items[hit].run();
+        this.run(hit);
         return;
       }
     }
 
-    if (input.pressed(Action.MENU_UP)) this.selected = (this.selected + this.items.length - 1) % this.items.length;
-    if (input.pressed(Action.MENU_DOWN)) this.selected = (this.selected + 1) % this.items.length;
+    const n = this.items.length;
+    if (input.pressed(Action.MENU_UP)) {
+      this.selected = (this.selected + n - 1) % n;
+      this.game.audio.sfx.play('uiMove');
+    }
+    if (input.pressed(Action.MENU_DOWN)) {
+      this.selected = (this.selected + 1) % n;
+      this.game.audio.sfx.play('uiMove');
+    }
 
     if (input.pressed(Action.CONFIRM)) {
-      this.items[this.selected].run();
+      this.run(this.selected);
     } else if (input.pressed(Action.PAUSE) || input.pressed(Action.BACK)) {
       this.resume();
     }

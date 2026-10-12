@@ -38,6 +38,8 @@ export class Player {
   private dashDirX = 0;
   private dashDirY = 0;
   readonly ghosts: Ghost[] = [];
+  /** True on the tick a dash started (for sound / effects). */
+  justDashed = false;
 
   /** Carried weapons + ammo (fired by weapons/weaponSystem.ts). */
   readonly arsenal = new Arsenal();
@@ -93,6 +95,7 @@ export class Player {
     this.prevX = this.x;
     this.prevY = this.y;
     this.prevAimAngle = this.aimAngle;
+    this.justDashed = false;
 
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     this.invulnTime = Math.max(0, this.invulnTime - dt);
@@ -119,6 +122,7 @@ export class Player {
         this.dashDirX = Math.cos(this.aimAngle);
         this.dashDirY = Math.sin(this.aimAngle);
       }
+      this.justDashed = true;
       this.dashTime = P.dash.duration;
       this.dashCooldown = P.dash.cooldown;
       this.invulnTime = Math.max(this.invulnTime, P.dash.duration + P.dash.iframeExtra);

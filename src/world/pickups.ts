@@ -117,6 +117,7 @@ export class PickupManager {
       }
     }
 
+    if (kind !== 'emp') w.sound(isWeaponPickup(kind) ? 'pickupWeapon' : kind === 'health' ? 'pickupHealth' : 'pickupBuff');
     w.popups.add(p.x, p.y - 34, label, color, 15, 1.0);
     w.particles.ring(p.x, p.y, color, 46, 0.35, 3);
     w.particles.burst(p.x, p.y, color, 14, 60, 240, 0.2, 0.45, 2);

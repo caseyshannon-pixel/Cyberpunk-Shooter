@@ -26,7 +26,13 @@ export class GameOverState implements GameState {
     if (this.isNewBest) storage.set(CONFIG.score.storageKey, String(score));
   }
 
+  enter(): void {
+    this.game.audio.music.stop();
+    this.game.audio.sfx.play('gameOver');
+  }
+
   private retry(): void {
+    this.game.audio.sfx.play('uiSelect');
     this.play.reset();
     this.game.pop();
   }

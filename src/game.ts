@@ -1,8 +1,11 @@
+import { GameAudio } from './audio';
 import { COLORS } from './config';
 import type { Display } from './core/display';
 import { INTERRUPT_EVENT } from './core/fullscreen';
 import { Action } from './input/bindings';
 import type { Input } from './input/input';
+import { renderCrt } from './render/crt';
+import { settings } from './settings';
 import type { GameState } from './states/state';
 import { Toasts } from './ui/toast';
 import { font } from './ui/text';
@@ -12,6 +15,8 @@ const STYLE_NAMES = { xbox: 'Xbox-style', playstation: 'PlayStation', generic: '
 /** Top-level container: owns the state stack and the shared services. */
 export class Game {
   readonly toasts = new Toasts();
+  readonly audio = new GameAudio();
+  private audioHintShown = false;
   private readonly stack: GameState[] = [];
   /** Real seconds since boot (keeps running while paused). */
   time = 0;
@@ -22,6 +27,8 @@ export class Game {
     readonly display: Display,
     readonly input: Input,
   ) {
+    settings.subscribe((s) => (input.rumbleEnabled = s.rumble));
+
     input.onPadConnected((pad) => {
       const style = STYLE_NAMES[pad.style];
       this.toasts.show(`Controller connected · ${style}${pad.standard ? '' : ' (non-standard mapping)'}`, COLORS.cyan);
@@ -70,6 +77,11 @@ export class Game {
     this.input.update();
     if (this.input.pressed(Action.DEBUG)) this.debug = !this.debug;
     this.toasts.update(dt);
+    // Browsers don't count controller buttons as a gesture that may start audio.
+    if (!this.audioHintShown && this.input.device === 'gamepad' && !this.audio.engine.running) {
+      this.audioHintShown = true;
+      this.toasts.show('Press any key or tap the screen to enable sound', COLORS.yellow, 4);
+    }
     this.top?.update(dt);
   }
 
@@ -80,9 +92,21 @@ export class Game {
 
     let from = this.stack.length - 1;
     while (from > 0 && this.stack[from].overlay) from--;
-    for (let i = Math.max(0, from); i < this.stack.length; i++) this.stack[i].render(ctx, alpha);
+    // An overlay marked `covers` (e.g. Settings over Pause) hides the overlays beneath it.
+    let coverAt = -1;
+    for (let i = this.stack.length - 1; i > from; i--) {
+      if (this.stack[i].covers) {
+        coverAt = i;
+        break;
+      }
+    }
+    for (let i = Math.max(0, from); i < this.stack.length; i++) {
+      if (i > from && i < coverAt) continue;
+      this.stack[i].render(ctx, alpha);
+    }
 
     this.toasts.render(ctx);
+    if (settings.get().crt) renderCrt(ctx, this.time);
     if (this.debug) this.renderDebug(ctx);
   }
 

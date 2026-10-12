@@ -28,11 +28,17 @@ export class PlayState implements GameState {
   /** Start a fresh run. The view width is locked here so the arena never changes shape mid-run. */
   reset(): void {
     this.game.display.setLogicalWidth(this.game.display.preferredWidth());
+    const audio = this.game.audio;
     this.world = new World({
       toast: (text, color) => this.game.toasts.show(text, color),
       rumble: (s, w, ms) => this.game.input.rumble(s, w, ms),
+      sound: (name, x) => audio.sfx.play(name, x),
+      waveStarted: (_wave, boss) => audio.music.setIntensity(boss ? 2 : 1),
     });
     this.gameOverShown = false;
+    audio.music.setIntensity(1);
+    audio.music.start();
+    audio.engine.duckMusic(1);
   }
 
   update(dt: number): void {
@@ -44,7 +50,19 @@ export class PlayState implements GameState {
       return;
     }
 
-    this.world.update(dt, input);
+    const w = this.world;
+    // Hit-stop: hold the frame for a moment on big impacts.
+    if (w.freeze > 0) {
+      w.freeze -= dt;
+      return;
+    }
+    let scale = 1;
+    if (w.slowMo > 0) {
+      w.slowMo -= dt;
+      scale = w.slowMoScale;
+      if (w.slowMo <= 0) w.slowMoScale = 1;
+    }
+    w.update(dt * scale, input);
 
     if (!this.world.player.alive && !this.gameOverShown && this.world.deathTime >= CONFIG.player.deathDelay) {
       this.gameOverShown = true;

@@ -9,6 +9,8 @@ import { Particles } from '../entities/particles';
 import { Player } from '../entities/player';
 import { Projectiles, renderProjectiles, type HomingTarget, type Projectile, type ProjectileHost } from '../entities/projectile';
 import type { Input } from '../input/input';
+import type { SfxName } from '../audio';
+import { settings } from '../settings';
 import { renderArena, renderBackground } from '../render/background';
 import { updateWeapons } from '../weapons/weaponSystem';
 import { Arena } from './arena';
@@ -25,6 +27,10 @@ const C = CONFIG.combat;
 export interface WorldHooks {
   toast(text: string, color?: string): void;
   rumble(strong: number, weak: number, ms: number): void;
+  /** Play a sound effect, optionally panned by world x. */
+  sound(name: SfxName, x?: number): void;
+  /** A wave began (drives music intensity, alarms). */
+  waveStarted(wave: number, boss: boolean): void;
 }
 
 /**
@@ -52,7 +58,13 @@ export class World implements ProjectileHost {
   deathTime = 0;
   /** Red full-screen flash after taking damage (seconds remaining). */
   damageFlash = 0;
-  private shakeAmt = 0;
+  /** Screen-shake "trauma" 0..1; offset grows with its square and it decays over time. */
+  private trauma = 0;
+  /** Hit-stop: seconds of frozen simulation left (rendering continues). */
+  freeze = 0;
+  /** Slow motion: seconds left and the time scale while it lasts. */
+  slowMo = 0;
+  slowMoScale = 1;
   private readonly near: Enemy[] = [];
 
   constructor(private readonly hooks: WorldHooks) {
@@ -73,6 +85,7 @@ export class World implements ProjectileHost {
     const p = this.player;
     if (p.alive) {
       p.update(dt, input, this.arena);
+      if (p.justDashed) this.sound('dash', p.x);
       updateWeapons(this, input, dt);
     } else {
       this.deathTime += dt;
@@ -91,7 +104,7 @@ export class World implements ProjectileHost {
     this.particles.update(dt);
     this.popups.update(dt);
     this.damageFlash = Math.max(0, this.damageFlash - dt);
-    this.shakeAmt *= Math.exp(-10 * dt);
+    this.trauma = Math.max(0, this.trauma - dt * 1.6);
   }
 
   private updateEnemies(dt: number): void {
@@ -197,6 +210,7 @@ export class World implements ProjectileHost {
   }
 
   projectileWall(b: Projectile, c: Contact): void {
+    if (b.team === 'player' && b.bounces > 0) this.sound('bounce', b.x);
     this.particles.burst(b.x, b.y, b.color, 3, 40, 160, 0.1, 0.22, 1.5, Math.atan2(c.ny, c.nx), 2.2);
   }
 
@@ -215,6 +229,7 @@ export class World implements ProjectileHost {
   }
 
   fireEnemyBullet(x: number, y: number, angle: number, speed: number, radius: number): void {
+    this.sound('enemyShoot', x);
     this.projectiles.spawn({
       x,
       y,
@@ -245,6 +260,9 @@ export class World implements ProjectileHost {
       e.boss.displayHp = e.hp;
       this.shake(10);
       this.hooks.rumble(0.5, 0.5, 400);
+      this.sound('stomp');
+    } else if (fx) {
+      this.sound('spawn', x);
     }
     e.cooldown = 0.8 + Math.random() * 1.2;
     e.angle = e.prevAngle = Math.atan2(this.player.y - y, this.player.x - x);
@@ -264,6 +282,7 @@ export class World implements ProjectileHost {
     e.kbx += nx * kb;
     e.kby += ny * kb;
     if (e.hp <= 0) this.killEnemy(e, nx, ny);
+    else this.sound('hit', e.x);
   }
 
   private killEnemy(e: Enemy, nx: number, ny: number): void {
@@ -280,8 +299,14 @@ export class World implements ProjectileHost {
     this.particles.burst(e.x, e.y, '#ffffff', 4 + (e.radius >> 2), 60, 200, 0.15, 0.3, 2);
     this.particles.ring(e.x, e.y, def.color, e.radius * 3, 0.35, big ? 4 : 2);
     if (big) {
-      this.shake(e.kind === 'boss' ? 20 : 5);
+      this.shake(e.kind === 'boss' ? 20 : 7);
       this.hooks.rumble(0.4, 0.6, 140);
+      if (e.kind !== 'boss') {
+        this.sound('explosion', e.x);
+        this.hitStop(0.05);
+      }
+    } else {
+      this.sound('enemyDie', e.x);
     }
 
     if (e.kind === 'splitter') {
@@ -305,6 +330,10 @@ export class World implements ProjectileHost {
       this.particles.ring(e.x, e.y, '#ffffff', 320, 0.8, 6);
       this.hooks.rumble(1, 1, 600);
       this.hooks.toast('WARDEN DESTROYED', COLORS.yellow);
+      this.sound('bossExplosion');
+      // Freeze-frame, then a beat of slow motion to savour it.
+      this.hitStop(0.22);
+      this.setSlowMo(1.2, 0.35);
       // Clear the boss's remaining bullets so the win feels clean.
       this.clearEnemyBullets();
     }
@@ -327,6 +356,7 @@ export class World implements ProjectileHost {
       if (p.shield === 0) this.popups.add(p.x, p.y - 34, 'SHIELD DOWN', COLORS.cyan, 13, 0.9);
       this.shake(4);
       this.hooks.rumble(0.3, 0.5, 120);
+      this.sound('shieldHit');
       return;
     }
 
@@ -336,12 +366,15 @@ export class World implements ProjectileHost {
     this.particles.burst(p.x, p.y, COLORS.cyan, 18, 80, 320, 0.25, 0.5, 2);
     this.shake(9);
     this.hooks.rumble(0.8, 0.9, 220);
+    this.hitStop(0.07);
+    this.sound(fatal ? 'playerDeath' : 'playerHit');
     if (fatal) {
       this.particles.burst(p.x, p.y, COLORS.cyan, 60, 100, 520, 0.5, 1.2, 3);
       this.particles.burst(p.x, p.y, COLORS.magenta, 40, 80, 420, 0.5, 1.0, 2.5);
       this.particles.ring(p.x, p.y, '#ffffff', 220, 0.7, 5);
       this.shake(18);
       this.hooks.rumble(1, 1, 700);
+      this.setSlowMo(1.0, 0.4);
     }
   }
 
@@ -367,20 +400,42 @@ export class World implements ProjectileHost {
     this.particles.ring(p.x, p.y, '#ffffff', 300, 0.45, 3);
     this.shake(8);
     this.hooks.rumble(0.6, 0.6, 300);
+    this.sound('emp');
   }
 
   rumble(strong: number, weak: number, ms: number): void {
     this.hooks.rumble(strong, weak, ms);
   }
 
+  onWaveStarted(wave: number, boss: boolean): void {
+    this.sound(boss ? 'bossAlarm' : 'waveStart');
+    this.hooks.waveStarted(wave, boss);
+  }
+
   onWaveCleared(wave: number): void {
+    this.sound('waveClear');
     const bonus = CONFIG.waves.clearBonusPerWave * wave;
     this.score.addBonus(bonus);
     this.popups.add(this.arena.centerX, this.arena.centerY + 70, `CLEAR BONUS +${bonus}`, COLORS.cyan, 18, 1.6);
   }
 
+  /** Add screen shake; `amount` is roughly the peak offset in pixels (≈22 = maximum). */
   shake(amount: number): void {
-    this.shakeAmt = Math.max(this.shakeAmt, amount);
+    this.trauma = Math.min(1, this.trauma + amount / 22);
+  }
+
+  /** Freeze the simulation briefly for impact ("hit-stop"). */
+  hitStop(seconds: number): void {
+    this.freeze = Math.max(this.freeze, seconds);
+  }
+
+  setSlowMo(seconds: number, scale: number): void {
+    this.slowMo = Math.max(this.slowMo, seconds);
+    this.slowMoScale = Math.min(this.slowMo > 0 ? this.slowMoScale : 1, scale);
+  }
+
+  sound(name: SfxName, x?: number): void {
+    this.hooks.sound(name, x);
   }
 
   toast(text: string, color?: string): void {
@@ -391,8 +446,18 @@ export class World implements ProjectileHost {
 
   render(ctx: CanvasRenderingContext2D, alpha: number): void {
     ctx.save();
-    if (this.shakeAmt > 0.3) {
-      ctx.translate((Math.random() - 0.5) * this.shakeAmt, (Math.random() - 0.5) * this.shakeAmt);
+    // Trauma shake: smooth (sum-of-sines noise) rather than random jitter, with a slight roll.
+    const k = this.trauma * this.trauma * settings.get().shake;
+    if (k > 0.001) {
+      const t = this.time * 32;
+      const nx = Math.sin(t * 1.1) * 0.6 + Math.sin(t * 2.3 + 1.7) * 0.4;
+      const ny = Math.sin(t * 1.3 + 4.2) * 0.6 + Math.sin(t * 2.9 + 0.3) * 0.4;
+      const nr = Math.sin(t * 0.9 + 2.4);
+      const cx = this.viewWidth / 2;
+      const cy = VIEW.height / 2;
+      ctx.translate(cx + nx * 22 * k, cy + ny * 22 * k);
+      ctx.rotate(nr * 0.012 * k);
+      ctx.translate(-cx, -cy);
     }
     renderBackground(ctx, this.time, this.arena);
     renderArena(ctx, this.arena, this.time);

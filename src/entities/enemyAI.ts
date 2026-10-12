@@ -102,6 +102,7 @@ function bruiser(e: Enemy, w: World, dt: number): void {
       if (e.cooldown <= 0 && d < B.chargeRange && w.arena.lineOfSight(e.x, e.y, p.x, p.y)) {
         e.state = 'telegraph';
         e.timer = B.chargeTelegraph;
+        w.sound('charge', e.x);
       }
       break;
     }
@@ -133,6 +134,7 @@ function bruiser(e: Enemy, w: World, dt: number): void {
         e.vx = e.vy = 0;
         w.particles.burst(e.x + e.dirX * e.radius, e.y + e.dirY * e.radius, '#ffffff', 14, 100, 320, 0.2, 0.45, 2);
         w.shake(6);
+        w.sound('stomp');
         e.state = 'idle';
         e.cooldown = B.chargeCooldown;
       } else if (e.timer <= 0) {

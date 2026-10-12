@@ -43,6 +43,7 @@ export function updateBoss(e: Enemy, w: World, dt: number): void {
     w.particles.ring(e.x, e.y, COLORS.red, 160, 0.6, 5);
     w.shake(10);
     w.toast('WARDEN ENRAGED', COLORS.red);
+    w.sound('enrage');
   }
   if (s.enraged) {
     s.summonTimer -= dt;
@@ -72,6 +73,7 @@ export function updateBoss(e: Enemy, w: World, dt: number): void {
         s.lastPattern = s.pattern;
         s.phase = 'windup';
         s.timer = (s.pattern === 'charge' ? B.chargeTelegraph : B.windup) * pace;
+        if (s.pattern === 'charge') w.sound('charge', e.x);
       }
       break;
     }
@@ -172,6 +174,7 @@ function attack(e: Enemy, s: BossState, w: World, dt: number, nx: number, ny: nu
         for (let i = 0; i < n; i++) w.fireEnemyBullet(e.x, e.y, (i / n) * TAU, speed * 0.9, B.bulletRadius);
         w.particles.ring(e.x, e.y, '#ffffff', 140, 0.45, 5);
         w.shake(12);
+        w.sound('stomp');
         e.vx = e.vy = 0;
         finish(s);
       }

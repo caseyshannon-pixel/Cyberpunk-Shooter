@@ -52,7 +52,7 @@ export class WaveDirector {
     switch (this.phase) {
       case 'cleared':
         this.timer -= dt;
-        if (this.timer <= 0) this.startWave(this.wave + 1);
+        if (this.timer <= 0) this.startWave(this.wave + 1, w);
         break;
       case 'intro':
         this.timer -= dt;
@@ -80,13 +80,14 @@ export class WaveDirector {
     this.phaseAge = 0;
   }
 
-  private startWave(n: number): void {
+  private startWave(n: number, w: World): void {
     this.wave = n;
     this.isBossWave = n % W.bossEvery === 0;
     this.queue = this.buildQueue(n);
     this.spawnTimer = 0;
     this.setPhase('intro');
     this.timer = W.bannerTime;
+    w.onWaveStarted(n, this.isBossWave);
   }
 
   /** Spend the wave's budget on weighted-random picks from the unlocked enemy kinds. */

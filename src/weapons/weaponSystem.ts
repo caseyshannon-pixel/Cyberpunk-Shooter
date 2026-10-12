@@ -2,6 +2,7 @@ import { CONFIG } from '../config';
 import { Action } from '../input/bindings';
 import type { Input } from '../input/input';
 import type { World } from '../world/world';
+import type { SfxName } from '../audio';
 import { WEAPONS } from './definitions';
 import { fireArc, fireProjectiles, fireRail } from './fire';
 
@@ -21,6 +22,7 @@ export function updateWeapons(w: World, input: Input, dt: number): void {
     p.charge = 0;
     p.fireCooldown = Math.max(p.fireCooldown, 0.08);
     w.popups.add(p.x, p.y - 30, ars.def.name, ars.def.color, 13, 0.7);
+    w.sound('swap');
   }
 
   const def = ars.def;
@@ -36,10 +38,12 @@ export function updateWeapons(w: World, input: Input, dt: number): void {
   if (def.mode === 'rail') {
     // Hold to charge; the beam discharges automatically when full (works with stick auto-fire).
     if (wantFire && p.fireCooldown <= 0) {
+      if (p.charge === 0) w.sound('railCharge', p.x);
       p.charge += (dt / (def.chargeTime ?? 0.4)) * (overclocked ? CONFIG.buffs.overclockRate : 1);
       if (p.charge >= 1) {
         p.charge = 0;
         fireRail(def, w, mx, my, p.aimAngle);
+        w.sound('shoot_rail', p.x);
         afterShot(w, interval);
         input.rumble(0.35, 0.2, 90);
       }
@@ -64,7 +68,10 @@ export function updateWeapons(w: World, input: Input, dt: number): void {
       }
     } else {
       fireProjectiles(def, w.projectiles, mx, my, p.aimAngle, 'player');
+      // A couple of muzzle sparks per shot.
+      w.particles.burst(mx, my, def.color, 2, 80, 240, 0.05, 0.12, 1.5, p.aimAngle, 0.9);
     }
+    w.sound(`shoot_${ars.current.id}` as SfxName, p.x);
     if (afterShot(w, interval)) break;
   }
 }
@@ -78,5 +85,6 @@ function afterShot(w: World, interval: number): boolean {
   if (!emptied) return false;
   p.charge = 0;
   w.popups.add(p.x, p.y - 30, `${WEAPONS[emptied].short} EMPTY`, '#8c7fb0', 12, 0.8);
+  w.sound('empty');
   return true;
 }
