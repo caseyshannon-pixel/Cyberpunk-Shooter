@@ -1,5 +1,6 @@
 import { CONFIG } from '../config';
 import { circleRect, segmentRect, type Contact, type Rect } from '../core/collision';
+import { VIEW } from '../core/view';
 
 export interface Obstacle extends Rect {
   kind: 'pillar' | 'crate';
@@ -12,22 +13,27 @@ const A = CONFIG.arena;
  * both movement and projectiles.
  */
 export class Arena {
-  readonly bounds: Rect = { x: A.x, y: A.y, w: A.width, h: A.height };
+  readonly bounds: Rect;
   readonly obstacles: Obstacle[] = [];
   private readonly contact: Contact = { nx: 0, ny: 0, depth: 0 };
 
-  constructor() {
+  /** `viewWidth` is the logical view width this run uses; the arena fills it minus margins. */
+  constructor(viewWidth: number = VIEW.width) {
+    this.bounds = { x: A.x, y: A.y, w: viewWidth - A.x * 2, h: A.height };
     this.buildLayout();
   }
 
   private buildLayout(): void {
-    const cx = A.x + A.width / 2;
-    const cy = A.y + A.height / 2;
+    const b = this.bounds;
+    const cx = b.x + b.w / 2;
+    const cy = b.y + b.h / 2;
+    // Horizontal offsets scale with the arena so wide screens get a wider layout, not a cramped centre.
+    const sx = b.w / A.width;
     const add = (x: number, y: number, w: number, h: number, kind: Obstacle['kind']) =>
       this.obstacles.push({ x: x - w / 2, y: y - h / 2, w, h, kind });
 
     // Four pillars around the centre.
-    const px = 260;
+    const px = 260 * sx;
     const py = 150;
     add(cx - px, cy - py, 56, 56, 'pillar');
     add(cx + px, cy - py, 56, 56, 'pillar');
@@ -35,8 +41,8 @@ export class Arena {
     add(cx + px, cy + py, 56, 56, 'pillar');
 
     // Crate walls near the flanks for cover.
-    add(cx - 470, cy, 40, 140, 'crate');
-    add(cx + 470, cy, 40, 140, 'crate');
+    add(cx - 470 * sx, cy, 40, 140, 'crate');
+    add(cx + 470 * sx, cy, 40, 140, 'crate');
     add(cx, cy - 235, 150, 36, 'crate');
     add(cx, cy + 235, 150, 36, 'crate');
   }
@@ -79,6 +85,25 @@ export class Arena {
       }
     }
     return hit;
+  }
+
+  /**
+   * Distance along the unit ray (dx, dy) from (x, y) to the first wall or
+   * obstacle, capped at `maxDist`. Used by beam weapons.
+   */
+  raycast(x: number, y: number, dx: number, dy: number, maxDist: number): number {
+    const b = this.bounds;
+    let best = maxDist;
+    // Walls: we start inside the arena, so take the exit distance on each axis.
+    if (dx > 0) best = Math.min(best, (b.x + b.w - x) / dx);
+    else if (dx < 0) best = Math.min(best, (b.x - x) / dx);
+    if (dy > 0) best = Math.min(best, (b.y + b.h - y) / dy);
+    else if (dy < 0) best = Math.min(best, (b.y - y) / dy);
+    for (const o of this.obstacles) {
+      const t = rayRect(x, y, dx, dy, o);
+      if (t !== null && t < best) best = t;
+    }
+    return Math.max(0, best);
   }
 
   /** True if nothing blocks a straight line between the two points. */
@@ -153,4 +178,24 @@ function set(c: Contact, nx: number, ny: number, depth: number): Contact {
   c.ny = ny;
   c.depth = depth;
   return c;
+}
+
+/** Slab-method ray vs rect: distance to entry (0 if starting inside), or null on a miss. */
+function rayRect(x: number, y: number, dx: number, dy: number, r: Rect): number | null {
+  let tmin = -Infinity;
+  let tmax = Infinity;
+  if (dx !== 0) {
+    const t1 = (r.x - x) / dx;
+    const t2 = (r.x + r.w - x) / dx;
+    tmin = Math.max(tmin, Math.min(t1, t2));
+    tmax = Math.min(tmax, Math.max(t1, t2));
+  } else if (x < r.x || x > r.x + r.w) return null;
+  if (dy !== 0) {
+    const t1 = (r.y - y) / dy;
+    const t2 = (r.y + r.h - y) / dy;
+    tmin = Math.max(tmin, Math.min(t1, t2));
+    tmax = Math.min(tmax, Math.max(t1, t2));
+  } else if (y < r.y || y > r.y + r.h) return null;
+  if (tmax < Math.max(tmin, 0)) return null;
+  return Math.max(tmin, 0);
 }

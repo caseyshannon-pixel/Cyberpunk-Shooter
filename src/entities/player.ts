@@ -2,10 +2,8 @@ import { COLORS, CONFIG } from '../config';
 import { approach, lerp, lerpAngle, len, vec, type Vec2 } from '../core/math';
 import { Action } from '../input/bindings';
 import type { Input } from '../input/input';
-import { DEFAULT_WEAPON, WEAPONS, type WeaponId } from '../weapons/definitions';
-import { fireWeapon } from '../weapons/fire';
+import { Arsenal } from '../weapons/arsenal';
 import type { Arena } from '../world/arena';
-import type { Projectiles } from './projectile';
 
 const P = CONFIG.player;
 
@@ -41,10 +39,20 @@ export class Player {
   private dashDirY = 0;
   readonly ghosts: Ghost[] = [];
 
-  weapon: WeaponId = DEFAULT_WEAPON;
+  /** Carried weapons + ammo (fired by weapons/weaponSystem.ts). */
+  readonly arsenal = new Arsenal();
   fireCooldown = 0;
   /** Seconds since last shot; drives muzzle flash. */
   sinceShot = 1;
+  /** Plasma rail charge, 0..1. */
+  charge = 0;
+
+  /** Seconds of Overclock (double fire rate) left. */
+  overclock = 0;
+  /** Hits the Shield Matrix can still absorb. */
+  shield = 0;
+  /** Seconds since the shield last absorbed a hit (for the flash). */
+  shieldHitAge = 1;
 
   private readonly aimDir: Vec2 = vec();
 
@@ -81,7 +89,7 @@ export class Player {
     return false;
   }
 
-  update(dt: number, input: Input, arena: Arena, projectiles: Projectiles): void {
+  update(dt: number, input: Input, arena: Arena): void {
     this.prevX = this.x;
     this.prevY = this.y;
     this.prevAimAngle = this.aimAngle;
@@ -89,6 +97,8 @@ export class Player {
     this.dashCooldown = Math.max(0, this.dashCooldown - dt);
     this.invulnTime = Math.max(0, this.invulnTime - dt);
     this.sinceShot += dt;
+    this.overclock = Math.max(0, this.overclock - dt);
+    this.shieldHitAge += dt;
 
     // --- Aim
     this.aiming = input.getAimDirection(this.x, this.y, this.aimDir);
@@ -142,22 +152,6 @@ export class Player {
       this.ghosts[i].life -= dt;
       if (this.ghosts[i].life <= 0) this.ghosts.splice(i, 1);
     }
-
-    // --- Fire
-    const def = WEAPONS[this.weapon];
-    this.fireCooldown -= dt;
-    if (input.isDown(Action.FIRE) && !this.dashing) {
-      const interval = 1 / def.fireRate;
-      while (this.fireCooldown <= 0) {
-        const mx = this.x + Math.cos(this.aimAngle) * P.muzzleOffset;
-        const my = this.y + Math.sin(this.aimAngle) * P.muzzleOffset;
-        fireWeapon(def, projectiles, mx, my, this.aimAngle, 'player');
-        this.fireCooldown += interval;
-        this.sinceShot = 0;
-      }
-    } else if (this.fireCooldown < 0) {
-      this.fireCooldown = 0;
-    }
   }
 
   render(ctx: CanvasRenderingContext2D, alpha: number, time: number): void {
@@ -175,14 +169,42 @@ export class Player {
     }
     ctx.restore();
 
-    // Flicker while invulnerable after a dash.
+    const def = this.arsenal.def;
+
+    if (this.shield > 0) drawShield(ctx, x, y, this.radius, this.shield, this.shieldHitAge, time);
+
+    // Flicker while invulnerable after a hit (not during the dash itself).
     if (this.invulnerable && !this.dashing && Math.floor(time * 30) % 2 === 0) return;
 
+    const oc = this.overclock > 0;
     ctx.save();
-    ctx.shadowColor = COLORS.cyan;
+    ctx.shadowColor = oc ? COLORS.yellow : COLORS.cyan;
     ctx.shadowBlur = 18;
-    drawShip(ctx, x, y, angle, this.dashing ? COLORS.magenta : COLORS.cyan, this.radius);
+    drawShip(ctx, x, y, angle, this.dashing ? COLORS.magenta : oc ? COLORS.yellow : COLORS.cyan, this.radius);
     ctx.restore();
+
+    // Rail charge: a growing orb at the muzzle plus a faint aim line.
+    if (this.charge > 0) {
+      const mx = x + Math.cos(angle) * (P.muzzleOffset + 4);
+      const my = y + Math.sin(angle) * (P.muzzleOffset + 4);
+      ctx.save();
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.strokeStyle = def.color;
+      ctx.globalAlpha = 0.15 + this.charge * 0.35;
+      ctx.lineWidth = 1 + this.charge * 2;
+      ctx.setLineDash([10, 8]);
+      ctx.beginPath();
+      ctx.moveTo(mx, my);
+      ctx.lineTo(mx + Math.cos(angle) * 420, my + Math.sin(angle) * 420);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = def.color;
+      ctx.globalAlpha = 0.5 + this.charge * 0.5;
+      ctx.beginPath();
+      ctx.arc(mx, my, 3 + this.charge * 7 + Math.sin(time * 50) * this.charge, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
 
     // Muzzle flash.
     if (this.sinceShot < 0.05) {
@@ -190,7 +212,7 @@ export class Player {
       const my = y + Math.sin(angle) * (P.muzzleOffset + 2);
       ctx.save();
       ctx.globalCompositeOperation = 'lighter';
-      ctx.fillStyle = WEAPONS[this.weapon].color;
+      ctx.fillStyle = def.color;
       ctx.globalAlpha = 1 - this.sinceShot / 0.05;
       ctx.beginPath();
       ctx.arc(mx, my, 7, 0, Math.PI * 2);
@@ -224,5 +246,33 @@ function drawShip(ctx: CanvasRenderingContext2D, x: number, y: number, angle: nu
   ctx.arc(r * 0.15, 0, r * 0.28, 0, Math.PI * 2);
   ctx.fillStyle = COLORS.magenta;
   ctx.fill();
+  ctx.restore();
+}
+
+/** Shield Matrix: a slowly rotating hexagon; brighter/thicker with more charges, flashes when hit. */
+function drawShield(ctx: CanvasRenderingContext2D, x: number, y: number, r: number, charges: number, hitAge: number, time: number): void {
+  const R = r + 12;
+  const flash = Math.max(0, 1 - hitAge / 0.25);
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.translate(x, y);
+  ctx.rotate(time * 0.8);
+  ctx.beginPath();
+  for (let i = 0; i < 6; i++) {
+    const a = (i / 6) * Math.PI * 2;
+    if (i === 0) ctx.moveTo(Math.cos(a) * R, Math.sin(a) * R);
+    else ctx.lineTo(Math.cos(a) * R, Math.sin(a) * R);
+  }
+  ctx.closePath();
+  ctx.fillStyle = COLORS.cyan;
+  ctx.globalAlpha = 0.06 + 0.04 * charges + flash * 0.3;
+  ctx.fill();
+  ctx.strokeStyle = flash > 0 ? '#ffffff' : COLORS.cyan;
+  ctx.globalAlpha = 0.25;
+  ctx.lineWidth = 6;
+  ctx.stroke();
+  ctx.globalAlpha = 0.55 + 0.15 * charges;
+  ctx.lineWidth = 1 + charges * 0.7;
+  ctx.stroke();
   ctx.restore();
 }

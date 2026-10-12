@@ -1,5 +1,5 @@
 import { COLORS, CONFIG } from '../config';
-import { circleCircle, segmentCircle } from '../core/collision';
+import { circleCircle, segmentCircle, type Contact } from '../core/collision';
 import { approach, len, TAU } from '../core/math';
 import { SpatialGrid } from '../core/spatialGrid';
 import { createBossState, renderBoss } from '../entities/boss';
@@ -7,13 +7,17 @@ import { Enemy, renderEnemy, type EnemyKind } from '../entities/enemy';
 import { ENEMY_AI } from '../entities/enemyAI';
 import { Particles } from '../entities/particles';
 import { Player } from '../entities/player';
-import { Projectiles, renderProjectiles, type Projectile, type ProjectileHost } from '../entities/projectile';
+import { Projectiles, renderProjectiles, type HomingTarget, type Projectile, type ProjectileHost } from '../entities/projectile';
 import type { Input } from '../input/input';
 import { renderArena, renderBackground } from '../render/background';
+import { updateWeapons } from '../weapons/weaponSystem';
 import { Arena } from './arena';
+import { Effects } from './effects';
+import { PickupManager } from './pickups';
 import { Popups } from './popups';
 import { ScoreKeeper } from './score';
 import { WaveDirector } from './waves';
+import { VIEW } from '../core/view';
 
 const C = CONFIG.combat;
 
@@ -28,12 +32,16 @@ export interface WorldHooks {
  * and score. States own a World; the World owns the simulation rules.
  */
 export class World implements ProjectileHost {
-  readonly arena = new Arena();
+  /** Logical view width this run was created for. */
+  readonly viewWidth = VIEW.width;
+  readonly arena = new Arena(this.viewWidth);
   readonly player: Player;
   readonly enemies: Enemy[] = [];
   readonly projectiles = new Projectiles();
   readonly particles = new Particles();
   readonly popups = new Popups();
+  readonly pickups = new PickupManager();
+  readonly effects = new Effects();
   readonly score = new ScoreKeeper();
   readonly waves = new WaveDirector();
   readonly grid: SpatialGrid<Enemy>;
@@ -63,8 +71,12 @@ export class World implements ProjectileHost {
   update(dt: number, input: Input): void {
     this.time += dt;
     const p = this.player;
-    if (p.alive) p.update(dt, input, this.arena, this.projectiles);
-    else this.deathTime += dt;
+    if (p.alive) {
+      p.update(dt, input, this.arena);
+      updateWeapons(this, input, dt);
+    } else {
+      this.deathTime += dt;
+    }
 
     this.waves.update(dt, this);
     this.updateEnemies(dt);
@@ -73,6 +85,8 @@ export class World implements ProjectileHost {
     for (const e of this.enemies) this.grid.insert(e);
 
     this.projectiles.update(dt, this);
+    this.pickups.update(dt, this);
+    this.effects.update(dt);
     this.score.update(dt);
     this.particles.update(dt);
     this.popups.update(dt);
@@ -159,10 +173,16 @@ export class World implements ProjectileHost {
       const reach = b.radius + len(b.x - b.prevX, b.y - b.prevY) / 2;
       this.grid.query(mx, my, reach, this.near);
       for (const e of this.near) {
-        if (e.dead) continue;
+        if (e.dead || b.hits.includes(e)) continue;
         if (!segmentCircle(b.prevX, b.prevY, b.x, b.y, b.radius, e.x, e.y, e.radius)) continue;
         this.damageEnemy(e, b.damage, b.vx, b.vy);
         this.particles.burst(b.x, b.y, b.color, 4, 60, 240, 0.12, 0.25, 1.5, Math.atan2(-b.vy, -b.vx), 1.6);
+        // Piercing shots carry on (remembering who they hit); others stop here.
+        if (b.pierce > 0) {
+          b.pierce--;
+          b.hits.push(e);
+          continue;
+        }
         return true;
       }
       return false;
@@ -176,8 +196,22 @@ export class World implements ProjectileHost {
     return false;
   }
 
-  projectileWall(b: Projectile): void {
-    this.particles.burst(b.x, b.y, b.color, 3, 40, 160, 0.1, 0.22, 1.5);
+  projectileWall(b: Projectile, c: Contact): void {
+    this.particles.burst(b.x, b.y, b.color, 3, 40, 160, 0.1, 0.22, 1.5, Math.atan2(c.ny, c.nx), 2.2);
+  }
+
+  nearestEnemy(x: number, y: number, maxDist: number): HomingTarget | null {
+    let best: Enemy | null = null;
+    let bd = maxDist * maxDist;
+    for (const e of this.enemies) {
+      if (e.dead) continue;
+      const d2 = (e.x - x) ** 2 + (e.y - y) ** 2;
+      if (d2 < bd) {
+        bd = d2;
+        best = e;
+      }
+    }
+    return best;
   }
 
   fireEnemyBullet(x: number, y: number, angle: number, speed: number, radius: number): void {
@@ -239,6 +273,8 @@ export class World implements ProjectileHost {
     const mult = this.score.multiplier;
     this.popups.add(e.x, e.y - e.radius, `+${pts}`, mult > 1 ? COLORS.yellow : COLORS.white, 12 + Math.min(10, mult * 1.5));
 
+    this.pickups.onEnemyKilled(e, this);
+
     const big = e.radius >= 20;
     this.particles.burst(e.x, e.y, def.color, 10 + e.radius, 80, 260 + e.radius * 8, 0.3, 0.7, 2.5);
     this.particles.burst(e.x, e.y, '#ffffff', 4 + (e.radius >> 2), 60, 200, 0.15, 0.3, 2);
@@ -280,6 +316,20 @@ export class World implements ProjectileHost {
     const dx = p.x - fromX;
     const dy = p.y - fromY;
     const d = len(dx, dy) || 1;
+
+    // Shield Matrix soaks the hit instead of health (and keeps the combo alive).
+    if (p.shield > 0) {
+      p.shield--;
+      p.shieldHitAge = 0;
+      p.invulnTime = CONFIG.buffs.shieldInvuln;
+      this.particles.burst(p.x, p.y, COLORS.cyan, p.shield > 0 ? 12 : 26, 80, 300, 0.2, 0.45, 2);
+      this.particles.ring(p.x, p.y, COLORS.cyan, p.shield > 0 ? 40 : 70, 0.3, 3);
+      if (p.shield === 0) this.popups.add(p.x, p.y - 34, 'SHIELD DOWN', COLORS.cyan, 13, 0.9);
+      this.shake(4);
+      this.hooks.rumble(0.3, 0.5, 120);
+      return;
+    }
+
     const fatal = p.takeHit(dx / d, dy / d);
     this.score.onPlayerHit();
     this.damageFlash = 0.35;
@@ -305,6 +355,24 @@ export class World implements ProjectileHost {
     }
   }
 
+  /** EMP pickup: wipe enemy bullets and stun every enemy (the boss only briefly). */
+  emp(): void {
+    this.clearEnemyBullets();
+    for (const e of this.enemies) {
+      e.stun = Math.max(e.stun, e.boss ? CONFIG.buffs.empBossStun : CONFIG.buffs.empStun);
+      e.flash = 0.15;
+    }
+    const p = this.player;
+    this.particles.ring(p.x, p.y, CONFIG.pickups.colors.emp, Math.max(this.arena.bounds.w, this.arena.bounds.h), 0.7, 6);
+    this.particles.ring(p.x, p.y, '#ffffff', 300, 0.45, 3);
+    this.shake(8);
+    this.hooks.rumble(0.6, 0.6, 300);
+  }
+
+  rumble(strong: number, weak: number, ms: number): void {
+    this.hooks.rumble(strong, weak, ms);
+  }
+
   onWaveCleared(wave: number): void {
     const bonus = CONFIG.waves.clearBonusPerWave * wave;
     this.score.addBonus(bonus);
@@ -326,14 +394,16 @@ export class World implements ProjectileHost {
     if (this.shakeAmt > 0.3) {
       ctx.translate((Math.random() - 0.5) * this.shakeAmt, (Math.random() - 0.5) * this.shakeAmt);
     }
-    renderBackground(ctx, this.time);
+    renderBackground(ctx, this.time, this.arena);
     renderArena(ctx, this.arena, this.time);
     this.waves.renderMarkers(ctx, this.time);
+    this.pickups.render(ctx);
     for (const e of this.enemies) {
       if (e.boss) renderBoss(ctx, e, alpha);
       else renderEnemy(ctx, e, alpha);
     }
-    renderProjectiles(ctx, this.projectiles, alpha);
+    renderProjectiles(ctx, this.projectiles, alpha, this.time);
+    this.effects.render(ctx);
     this.particles.render(ctx, alpha);
     this.player.render(ctx, alpha, this.time);
     this.popups.render(ctx);
@@ -341,8 +411,8 @@ export class World implements ProjectileHost {
 
     if (this.damageFlash > 0) {
       ctx.save();
-      const W = CONFIG.view.width;
-      const H = CONFIG.view.height;
+      const W = VIEW.width;
+      const H = VIEW.height;
       const g = ctx.createRadialGradient(W / 2, H / 2, H * 0.35, W / 2, H / 2, W * 0.7);
       g.addColorStop(0, 'rgba(255, 30, 70, 0)');
       g.addColorStop(1, `rgba(255, 30, 70, ${(this.damageFlash / 0.35) * 0.45})`);

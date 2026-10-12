@@ -1,6 +1,7 @@
 import { CONFIG } from '../config';
 import { onFullscreenChange } from './fullscreen';
 import type { Vec2 } from './math';
+import { VIEW } from './view';
 
 /**
  * Owns the canvas. Scales the fixed logical resolution to fit the available
@@ -10,8 +11,13 @@ import type { Vec2 } from './math';
  */
 export class Display {
   readonly ctx: CanvasRenderingContext2D;
-  readonly width = CONFIG.view.width;
-  readonly height = CONFIG.view.height;
+  /** Logical width (varies per run, see VIEW). */
+  get width(): number {
+    return VIEW.width;
+  }
+  get height(): number {
+    return VIEW.height;
+  }
   /** CSS pixels per logical pixel. */
   scale = 1;
   dpr = 1;
@@ -55,10 +61,35 @@ export class Display {
     mq.addEventListener('change', handler);
   }
 
-  resize = (): void => {
+  /** CSS size of the area the canvas may occupy (window minus safe-area insets). */
+  private available(): { w: number; h: number } {
     const cs = getComputedStyle(this.stage);
-    const availW = this.stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
-    const availH = this.stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom);
+    return {
+      w: this.stage.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight),
+      h: this.stage.clientHeight - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom),
+    };
+  }
+
+  /**
+   * The logical width that would fill the current screen with no side bars:
+   * 1280 for 16:9 or narrower, wider for phones in landscape (capped).
+   */
+  preferredWidth(): number {
+    const { w, h } = this.available();
+    if (w <= 0 || h <= 0 || h > w) return CONFIG.view.width;
+    const ideal = Math.round((VIEW.height * w) / h / 2) * 2;
+    return Math.max(CONFIG.view.width, Math.min(CONFIG.view.maxWidth, ideal));
+  }
+
+  /** Lock the logical width (done at the start of each run) and refit the canvas. */
+  setLogicalWidth(width: number): void {
+    if (width === VIEW.width) return;
+    VIEW.width = width;
+    this.resize();
+  }
+
+  resize = (): void => {
+    const { w: availW, h: availH } = this.available();
     if (availW <= 0 || availH <= 0) return;
 
     const scale = Math.min(availW / this.width, availH / this.height);

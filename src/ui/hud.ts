@@ -5,9 +5,11 @@ import type { Player } from '../entities/player';
 import { Action, Axis } from '../input/bindings';
 import type { Input } from '../input/input';
 import { WEAPONS } from '../weapons/definitions';
+import { TAU } from '../core/math';
 import type { World } from '../world/world';
 import { renderPrompts, type PromptEntry } from './prompts';
 import { font, glowText } from './text';
+import { VIEW } from '../core/view';
 
 const GAMEPLAY_PROMPTS_PAD: PromptEntry[] = [
   { axis: Axis.MOVE, label: 'MOVE' },
@@ -16,6 +18,8 @@ const GAMEPLAY_PROMPTS_PAD: PromptEntry[] = [
   { action: Action.DASH, label: 'DASH' },
   { action: Action.PAUSE, label: 'PAUSE' },
 ];
+
+const SWAP_PROMPT: PromptEntry = { action: Action.WEAPON_NEXT, label: 'SWAP' };
 
 const GAMEPLAY_PROMPTS_KB: PromptEntry[] = [
   { axis: Axis.MOVE, label: 'MOVE' },
@@ -26,8 +30,8 @@ const GAMEPLAY_PROMPTS_KB: PromptEntry[] = [
 ];
 
 export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: Input): void {
-  const W = CONFIG.view.width;
-  const H = CONFIG.view.height;
+  const W = VIEW.width;
+  const H = VIEW.height;
   const player = world.player;
 
   // Health pips (top-left).
@@ -62,13 +66,13 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
   renderScore(ctx, world);
   renderBossBar(ctx, world);
 
-  // Weapon (top-right).
-  const def = WEAPONS[player.weapon];
-  glowText(ctx, `${def.name}  ${def.ammo === null ? '∞' : def.ammo}`, W - 56, 20, { size: 15, color: def.color, align: 'right' });
+  const weaponLeft = renderWeapon(ctx, player);
+  renderBuffs(ctx, player, weaponLeft - 26);
 
   // Control prompts (bottom). Touch players get the on-screen controls instead.
   if (input.device === 'touch') return;
-  renderPrompts(ctx, input.device === 'gamepad' ? GAMEPLAY_PROMPTS_PAD : GAMEPLAY_PROMPTS_KB, input, W / 2, H - 20, 'center', 12, 0.75);
+  const prompts = input.device === 'gamepad' ? GAMEPLAY_PROMPTS_PAD : GAMEPLAY_PROMPTS_KB;
+  renderPrompts(ctx, player.arsenal.slots.length > 1 ? [...prompts, SWAP_PROMPT] : prompts, input, W / 2, H - 20, 'center', 12, 0.75);
 }
 
 /** Dash cooldown arc drawn around the player while recharging. */
@@ -135,7 +139,7 @@ export function renderReticle(ctx: CanvasRenderingContext2D, player: Player, inp
 
 /** Score (top centre) with the combo multiplier and its countdown bar. */
 function renderScore(ctx: CanvasRenderingContext2D, world: World): void {
-  const W = CONFIG.view.width;
+  const W = VIEW.width;
   const sc = world.score;
   const text = String(sc.score).padStart(7, '0');
   glowText(ctx, text, W / 2, 18, { size: 22, color: COLORS.white, glow: COLORS.cyan, blur: 10, align: 'center' });
@@ -176,7 +180,7 @@ function renderBossBar(ctx: CanvasRenderingContext2D, world: World): void {
   const s = boss.boss;
   // Ghost bar trails behind the real one to show chunks of damage.
   s.displayHp += (boss.hp - s.displayHp) * 0.06;
-  const W = CONFIG.view.width;
+  const W = VIEW.width;
   const bw = 520;
   const x = (W - bw) / 2;
   const y = 64;
@@ -205,8 +209,8 @@ function renderBossBar(ctx: CanvasRenderingContext2D, world: World): void {
 /** Big centre-screen "WAVE X" banner during the intro, "WAVE CLEAR" after. */
 export function renderWaveBanner(ctx: CanvasRenderingContext2D, world: World): void {
   const waves = world.waves;
-  const W = CONFIG.view.width;
-  const H = CONFIG.view.height;
+  const W = VIEW.width;
+  const H = VIEW.height;
   const t = waves.phaseAge;
 
   if (waves.phase === 'intro') {
@@ -245,5 +249,103 @@ export function renderWaveBanner(ctx: CanvasRenderingContext2D, world: World): v
   } else if (waves.phase === 'cleared' && waves.wave > 0 && t < 1.6) {
     const a = Math.min(1, t / 0.2, (1.6 - t) / 0.4);
     glowText(ctx, 'WAVE CLEAR', W / 2, H / 2 - 10, { size: 44, color: COLORS.cyan, blur: 18, align: 'center', alpha: a });
+  }
+}
+
+/**
+ * Top-right weapon block: name, ammo bar (∞ for the Pulse Pistol) and a row of
+ * slots for every carried weapon. Returns the block's left edge for layout.
+ */
+function renderWeapon(ctx: CanvasRenderingContext2D, player: Player): number {
+  const W = VIEW.width;
+  const right = W - 56;
+  const ars = player.arsenal;
+  const def = ars.def;
+  const slot = ars.current;
+
+  glowText(ctx, def.name, right, 13, { size: 14, color: def.color, align: 'right', blur: 8 });
+
+  const barW = 112;
+  const barX = right - barW;
+  const y = 29;
+  ctx.save();
+  if (Number.isFinite(slot.ammo)) {
+    const k = Math.max(0, slot.ammo / slot.capacity);
+    ctx.fillStyle = 'rgba(255,255,255,0.12)';
+    ctx.fillRect(barX, y, barW, 5);
+    ctx.fillStyle = k < 0.25 && Math.sin(performance.now() / 90) > 0 ? COLORS.red : def.color;
+    ctx.fillRect(barX, y, barW * k, 5);
+    ctx.font = font(10, 'normal');
+    ctx.fillStyle = COLORS.white;
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(String(Math.ceil(slot.ammo)), barX - 6, y + 3);
+  } else {
+    ctx.fillStyle = def.color;
+    ctx.globalAlpha = 0.45;
+    ctx.fillRect(barX, y, barW, 5);
+    ctx.globalAlpha = 1;
+    ctx.font = font(12);
+    ctx.textAlign = 'right';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('∞', barX - 6, y + 2);
+  }
+
+  // Held weapons (current one bright and outlined).
+  let sx = barX - 34;
+  for (let i = ars.slots.length - 1; i >= 0; i--) {
+    const d = WEAPONS[ars.slots[i].id];
+    const cur = i === ars.index;
+    ctx.globalAlpha = cur ? 1 : 0.45;
+    ctx.fillStyle = d.color;
+    ctx.fillRect(sx, y - 1, 7, 7);
+    if (cur) {
+      ctx.strokeStyle = '#ffffff';
+      ctx.lineWidth = 1;
+      ctx.strokeRect(sx - 1.5, y - 2.5, 10, 10);
+    }
+    sx -= 11;
+  }
+  ctx.restore();
+  return Math.min(sx, right - 150);
+}
+
+/** Active buffs as icons with countdown rings (shield shows its remaining charges). */
+function renderBuffs(ctx: CanvasRenderingContext2D, player: Player, rightX: number): void {
+  const items: { color: string; label: string; k: number }[] = [];
+  if (player.overclock > 0) {
+    items.push({ color: CONFIG.pickups.colors.overclock, label: '2X', k: player.overclock / CONFIG.buffs.overclockDuration });
+  }
+  if (player.shield > 0) {
+    items.push({ color: CONFIG.pickups.colors.shield, label: String(player.shield), k: player.shield / CONFIG.buffs.shieldHits });
+  }
+  let x = rightX;
+  const y = 20;
+  const r = 13;
+  for (const it of items) {
+    ctx.save();
+    ctx.fillStyle = 'rgba(8, 2, 22, 0.85)';
+    ctx.beginPath();
+    ctx.arc(x, y, r, 0, TAU);
+    ctx.fill();
+    ctx.strokeStyle = it.color;
+    ctx.globalAlpha = 0.25;
+    ctx.lineWidth = 3;
+    ctx.stroke();
+    // Remaining time / charges as a draining arc.
+    ctx.globalAlpha = 1;
+    ctx.shadowColor = it.color;
+    ctx.shadowBlur = 8;
+    ctx.beginPath();
+    ctx.arc(x, y, r, -Math.PI / 2, -Math.PI / 2 + TAU * it.k);
+    ctx.stroke();
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = it.color;
+    ctx.font = font(10);
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(it.label, x, y + 1);
+    ctx.restore();
+    x -= r * 2 + 10;
   }
 }

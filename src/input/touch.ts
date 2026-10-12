@@ -1,6 +1,7 @@
 import { CONFIG } from '../config';
 import { applyRadialDeadzone, len, vec, type Vec2 } from '../core/math';
 import { Action } from './bindings';
+import { VIEW } from '../core/view';
 
 const T = CONFIG.touch;
 
@@ -17,8 +18,18 @@ export interface TouchStick {
 
 export type TouchButtonId = keyof typeof T.buttons;
 
+/** An x position anchored to the left or right screen edge (see CONFIG.touch). */
+export type EdgeAnchor = { left: number; right?: undefined } | { right: number; left?: undefined };
+
+/** Resolve an edge-anchored x against the current view width. */
+export function anchorX(a: EdgeAnchor): number {
+  return a.left !== undefined ? a.left : VIEW.width - a.right;
+}
+
 export interface TouchButton {
   id: TouchButtonId;
+  anchor: EdgeAnchor;
+  /** Resolved from `anchor` by `layout()`. */
   x: number;
   y: number;
   /** Visual radius. */
@@ -69,12 +80,15 @@ export class TouchControls {
       pause: Action.PAUSE,
       fullscreen: null,
     };
-    this.buttons = (Object.keys(T.buttons) as TouchButtonId[]).map((id) => ({
-      id,
-      ...T.buttons[id],
-      action: actions[id],
-      visible: true,
-    }));
+    this.buttons = (Object.keys(T.buttons) as TouchButtonId[]).map((id) => {
+      const def: EdgeAnchor & { y: number; r: number; hit: number } = T.buttons[id];
+      return { id, anchor: def, x: anchorX(def), y: def.y, r: def.r, hit: def.hit, action: actions[id], visible: true };
+    });
+  }
+
+  /** Re-resolve button positions (the view width can change between runs). */
+  layout(): void {
+    for (const b of this.buttons) b.x = anchorX(b.anchor);
   }
 
   get anyActive(): boolean {
@@ -104,6 +118,7 @@ export class TouchControls {
   }
 
   down(id: number, x: number, y: number): void {
+    this.layout();
     if (!this.gameplay) {
       this.roles.set(id, { kind: 'tap' });
       this.onTap(x, y);
@@ -120,7 +135,7 @@ export class TouchControls {
       }
     }
 
-    const stick = x < CONFIG.view.width / 2 ? this.left : this.right;
+    const stick = x < VIEW.width / 2 ? this.left : this.right;
     if (stick.active) {
       this.roles.set(id, { kind: 'ignore' });
       return;

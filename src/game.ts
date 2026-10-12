@@ -1,5 +1,6 @@
 import { COLORS } from './config';
 import type { Display } from './core/display';
+import { INTERRUPT_EVENT } from './core/fullscreen';
 import { Action } from './input/bindings';
 import type { Input } from './input/input';
 import type { GameState } from './states/state';
@@ -35,6 +36,8 @@ export class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) lost();
     });
+    // A DOM overlay (e.g. the iPhone full-screen guide) covering the game.
+    window.addEventListener(INTERRUPT_EVENT, lost);
     // Phones/tablets rotated to portrait get a "rotate" overlay (see index.html); pause underneath it.
     const portrait = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
     portrait.addEventListener('change', () => {

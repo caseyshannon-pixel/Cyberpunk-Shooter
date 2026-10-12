@@ -1,5 +1,6 @@
 import { COLORS, CONFIG } from '../config';
 import { font } from './text';
+import { VIEW } from '../core/view';
 
 interface Toast {
   text: string;
@@ -32,7 +33,7 @@ export class Toasts {
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    const cx = CONFIG.view.width / 2;
+    const cx = VIEW.width / 2;
     let y: number = CONFIG.ui.toastY;
     ctx.save();
     ctx.font = font(15);

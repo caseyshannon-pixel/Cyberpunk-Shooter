@@ -16,6 +16,10 @@ export class Popups {
 
   add(x: number, y: number, text: string, color: string, size = 14, life = 0.8): void {
     if (this.items.length > 40) this.items.shift();
+    // Stack above fresh popups at the same spot instead of overlapping them.
+    for (const p of this.items) {
+      if (p.maxLife - p.life < 0.35 && Math.abs(p.x - x) < 60 && Math.abs(p.y - y) < 16) y = p.y - 18;
+    }
     this.items.push({ x, y, text, color, size, life, maxLife: life });
   }
 

@@ -1,36 +1,44 @@
 import { COLORS, CONFIG } from '../config';
 import type { Arena } from '../world/arena';
+import { VIEW } from '../core/view';
 import { currentScale, makeLayer, type Layer } from './cache';
 
 const A = CONFIG.arena;
-const W = CONFIG.view.width;
 const H = CONFIG.view.height;
 /** The grid pattern repeats every 4 cells (every 4th line is bright). */
 const GRID_PERIOD = A.gridSize * 4;
 
-let floor: Layer | null = null;
-let grid: Layer | null = null;
+interface Keyed {
+  layer: Layer;
+  key: string;
+}
+let floor: Keyed | null = null;
+let grid: Keyed | null = null;
 
 /**
  * Floor gradient + scrolling neon grid. Both are cached: the floor is one
  * opaque full-view layer, and the grid is a tile one period larger than the
  * arena that we blit with an offset to make it scroll.
  */
-export function renderBackground(ctx: CanvasRenderingContext2D, time: number): void {
+export function renderBackground(ctx: CanvasRenderingContext2D, time: number, arena: Arena): void {
   const scale = currentScale(ctx);
-  if (!floor || floor.scale !== scale) floor = buildFloor(scale);
-  if (!grid || grid.scale !== scale) grid = buildGrid(scale);
+  const b = arena.bounds;
+  const key = `${scale}|${VIEW.width}|${b.w}x${b.h}`;
+  if (!floor || floor.key !== key) floor = { layer: buildFloor(scale, arena), key };
+  if (!grid || grid.key !== key) grid = { layer: buildGrid(scale, arena), key };
 
-  ctx.drawImage(floor.canvas, 0, 0, W, H);
+  ctx.drawImage(floor.layer.canvas, 0, 0, VIEW.width, H);
 
   const off = (time * A.gridScroll) % GRID_PERIOD;
-  const s = grid.scale;
+  const s = grid.layer.scale;
   // Source rect starts one period in, minus the offset, so lines appear to move down-right.
   const sx = (GRID_PERIOD - off) * s;
-  ctx.drawImage(grid.canvas, sx, sx, A.width * s, A.height * s, A.x, A.y, A.width, A.height);
+  ctx.drawImage(grid.layer.canvas, sx, sx, b.w * s, b.h * s, b.x, b.y, b.w, b.h);
 }
 
-function buildFloor(scale: number): Layer {
+function buildFloor(scale: number, arena: Arena): Layer {
+  const W = VIEW.width;
+  const b = arena.bounds;
   const layer = makeLayer(W, H, scale);
   const c = layer.ctx;
   c.fillStyle = COLORS.bgDeep;
@@ -39,13 +47,13 @@ function buildFloor(scale: number): Layer {
   g.addColorStop(0, '#12052a');
   g.addColorStop(1, COLORS.bgDeep);
   c.fillStyle = g;
-  c.fillRect(A.x, A.y, A.width, A.height);
+  c.fillRect(b.x, b.y, b.w, b.h);
   return layer;
 }
 
-function buildGrid(scale: number): Layer {
-  const w = A.width + GRID_PERIOD;
-  const h = A.height + GRID_PERIOD;
+function buildGrid(scale: number, arena: Arena): Layer {
+  const w = arena.bounds.w + GRID_PERIOD;
+  const h = arena.bounds.h + GRID_PERIOD;
   const layer = makeLayer(w, h, scale);
   const c = layer.ctx;
   const size = A.gridSize;
@@ -72,7 +80,7 @@ function buildGrid(scale: number): Layer {
   return layer;
 }
 
-let walls: { layer: Layer; arena: Arena } | null = null;
+let walls: { layer: Layer; arena: Arena; width: number } | null = null;
 
 /**
  * Walls and obstacles never change, and canvas shadowBlur is expensive
@@ -81,10 +89,11 @@ let walls: { layer: Layer; arena: Arena } | null = null;
  */
 export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: number): void {
   const scale = currentScale(ctx);
-  if (!walls || walls.arena !== arena || walls.layer.scale !== scale) {
+  const W = VIEW.width;
+  if (!walls || walls.arena !== arena || walls.layer.scale !== scale || walls.width !== W) {
     const layer = makeLayer(W, H, scale);
     drawArena(layer.ctx, arena, scale);
-    walls = { layer, arena };
+    walls = { layer, arena, width: W };
   }
   ctx.save();
   ctx.globalAlpha = 0.82 + Math.sin(time * 2) * 0.18;

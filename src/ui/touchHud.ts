@@ -3,7 +3,7 @@ import { isFullscreen } from '../core/fullscreen';
 import { len } from '../core/math';
 import type { Player } from '../entities/player';
 import type { Input } from '../input/input';
-import type { TouchButton, TouchStick } from '../input/touch';
+import { anchorX, type EdgeAnchor, type TouchButton, type TouchStick } from '../input/touch';
 import { font } from './text';
 
 const T = CONFIG.touch;
@@ -13,6 +13,7 @@ const KNOB_R = 26;
 export function renderTouchHud(ctx: CanvasRenderingContext2D, input: Input, player: Player): void {
   if (input.device !== 'touch') return;
   const tc = input.touch;
+  tc.layout();
   ctx.save();
   drawStick(ctx, tc.left, T.moveHint, 'MOVE', COLORS.cyan);
   drawStick(ctx, tc.right, T.aimHint, 'AIM', COLORS.magenta);
@@ -23,8 +24,9 @@ export function renderTouchHud(ctx: CanvasRenderingContext2D, input: Input, play
   ctx.restore();
 }
 
-function drawStick(ctx: CanvasRenderingContext2D, s: TouchStick, hint: { x: number; y: number }, label: string, color: string): void {
+function drawStick(ctx: CanvasRenderingContext2D, s: TouchStick, anchor: EdgeAnchor & { y: number }, label: string, color: string): void {
   const R = T.stickRadius;
+  const hint = { x: anchorX(anchor), y: anchor.y };
   if (!s.active) {
     // Faint hint so first-time players know where to put their thumbs.
     ctx.globalAlpha = 0.18;
@@ -105,7 +107,8 @@ function drawButton(ctx: CanvasRenderingContext2D, b: TouchButton, down: boolean
       break;
     }
     case 'weapon':
-      ctx.globalAlpha = 0.85;
+      // Dim when there's only one weapon to cycle through.
+      ctx.globalAlpha = player.arsenal.slots.length > 1 ? 0.95 : 0.3;
       ctx.font = font(11);
       ctx.fillText('SWAP', b.x, b.y + 1);
       break;

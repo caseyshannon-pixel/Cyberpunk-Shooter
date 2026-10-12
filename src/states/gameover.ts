@@ -6,6 +6,7 @@ import { renderPrompts } from '../ui/prompts';
 import { glowText } from '../ui/text';
 import type { PlayState } from './play';
 import type { GameState } from './state';
+import { VIEW } from '../core/view';
 
 /** Shown over the frozen arena after the player dies. Saves the high score. */
 export class GameOverState implements GameState {
@@ -38,8 +39,8 @@ export class GameOverState implements GameState {
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    const W = CONFIG.view.width;
-    const H = CONFIG.view.height;
+    const W = VIEW.width;
+    const H = VIEW.height;
     const fade = Math.min(1, this.age / 0.4);
     const w = this.play.world;
 

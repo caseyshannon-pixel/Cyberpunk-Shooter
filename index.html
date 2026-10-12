@@ -28,7 +28,8 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        background: #000;
+        /* Matches the game's backdrop so any letterbox / notch area blends in. */
+        background: #020008;
         overflow: hidden;
         overscroll-behavior: none;
         /* No scrolling, pinch-zoom, double-tap zoom, text selection or long-press callouts. */
@@ -84,6 +85,89 @@
         0%, 30% { transform: rotate(0deg); }
         60%, 100% { transform: rotate(-90deg); }
       }
+      /* iPhone "full screen" guide (Safari on iPhone has no fullscreen API). */
+      #fsguide {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 20;
+        background: rgba(2, 0, 8, 0.92);
+        color: #f4f0ff;
+        font: 16px/1.5 Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+        align-items: center;
+        justify-content: center;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+        box-sizing: border-box;
+      }
+      #fsguide.show {
+        display: flex;
+      }
+      #fsguide .card {
+        max-width: 520px;
+        margin: 16px;
+        padding: 22px 26px;
+        border: 2px solid #00f0ff;
+        border-radius: 12px;
+        box-shadow: 0 0 22px rgba(0, 240, 255, 0.45);
+        background: #0b0220;
+      }
+      #fsguide h2 {
+        margin: 0 0 12px;
+        font-size: 18px;
+        letter-spacing: 0.12em;
+        color: #00f0ff;
+        text-shadow: 0 0 10px #00f0ff;
+      }
+      #fsguide ol {
+        margin: 0 0 18px;
+        padding-left: 1.4em;
+      }
+      #fsguide li {
+        margin: 6px 0;
+      }
+      #fsguide .share {
+        display: inline-block;
+        width: 14px;
+        height: 16px;
+        vertical-align: -2px;
+        border: 2px solid #ff2bd6;
+        border-top: none;
+        border-radius: 0 0 3px 3px;
+        position: relative;
+        margin: 0 2px;
+      }
+      #fsguide .share::after {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: -8px;
+        width: 6px;
+        height: 6px;
+        border-left: 2px solid #ff2bd6;
+        border-top: 2px solid #ff2bd6;
+        transform: translateX(-50%) rotate(45deg);
+      }
+      #fsguide .share::before {
+        content: '';
+        position: absolute;
+        left: 50%;
+        top: -7px;
+        width: 2px;
+        height: 14px;
+        background: #ff2bd6;
+        transform: translateX(-50%);
+      }
+      #fsguide button {
+        font: bold 15px Menlo, Consolas, monospace;
+        letter-spacing: 0.1em;
+        color: #020008;
+        background: #00f0ff;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 22px;
+        box-shadow: 0 0 14px rgba(0, 240, 255, 0.6);
+      }
+
       /* Touch-first devices held in portrait: ask for landscape. */
       @media (orientation: portrait) and (pointer: coarse) {
         #rotate {
@@ -94,6 +178,17 @@
   </head>
   <body>
     <div id="stage"><canvas id="game" tabindex="0"></canvas></div>
+    <div id="fsguide" role="dialog" aria-modal="true" aria-labelledby="fsguide-title">
+      <div class="card">
+        <h2 id="fsguide-title">PLAY FULL SCREEN</h2>
+        <ol>
+          <li>Tap <span class="share" aria-label="Share"></span> <b>Share</b> in Safari's toolbar.</li>
+          <li>Choose <b>Add to Home Screen</b>, then <b>Add</b>.</li>
+          <li>Open <b>NEON//GRID</b> from your Home Screen — it runs full screen with no browser bars.</li>
+        </ol>
+        <button type="button" id="fsguide-close">GOT IT</button>
+      </div>
+    </div>
     <div id="rotate">
       <div class="phone"></div>
       <div>ROTATE TO LANDSCAPE</div>

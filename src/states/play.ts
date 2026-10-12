@@ -17,9 +17,17 @@ export class PlayState implements GameState {
 
   constructor(private readonly game: Game) {
     this.reset();
+    // If the screen changes shape before the first wave starts (e.g. the page
+    // loaded in portrait and the phone was then rotated), re-fit the arena.
+    game.display.onResize(() => {
+      const w = this.world;
+      if (w.waves.wave === 0 && w.score.kills === 0 && game.display.preferredWidth() !== w.viewWidth) this.reset();
+    });
   }
 
+  /** Start a fresh run. The view width is locked here so the arena never changes shape mid-run. */
   reset(): void {
+    this.game.display.setLogicalWidth(this.game.display.preferredWidth());
     this.world = new World({
       toast: (text, color) => this.game.toasts.show(text, color),
       rumble: (s, w, ms) => this.game.input.rumble(s, w, ms),

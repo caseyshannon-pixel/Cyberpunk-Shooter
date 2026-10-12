@@ -1,6 +1,6 @@
 import { CONFIG } from '../config';
 import type { Display } from '../core/display';
-import { fullscreenSupported, isStandalone, toggleFullscreen } from '../core/fullscreen';
+import { canExpand, expand, toggleFullscreen } from '../core/fullscreen';
 import { applyRadialDeadzone, len, vec, type Vec2 } from '../core/math';
 import {
   ALL_ACTIONS,
@@ -15,6 +15,7 @@ import {
   PadAxes,
 } from './bindings';
 import { TouchControls } from './touch';
+import { VIEW } from '../core/view';
 
 export type Device = 'keyboard' | 'gamepad' | 'touch';
 export type PadStyle = 'xbox' | 'playstation' | 'generic';
@@ -72,7 +73,7 @@ export class Input {
   /** Deadzoned aim stick (gamepad right stick or touch right stick), magnitude 0..1. */
   readonly aimStick: Vec2 = vec();
   /** Mouse position in logical game coordinates. */
-  readonly mouse: Vec2 = vec(CONFIG.view.width / 2, CONFIG.view.height / 2);
+  readonly mouse: Vec2 = vec(VIEW.width / 2, VIEW.height / 2);
   mouseInside = false;
   /** Mouse moved since last tick (menus use it for hover selection). */
   mouseMoved = false;
@@ -115,10 +116,11 @@ export class Input {
     }
     this.touch = new TouchControls(
       (x, y) => this.pendingTaps.push({ x, y }),
-      () => toggleFullscreen(),
+      () => expand(),
     );
-    // No fullscreen button where it can't work (iPhone Safari) or isn't needed (home-screen app).
-    this.touch.setButtonVisible('fullscreen', fullscreenSupported() && !isStandalone());
+    // ⛶ toggles real fullscreen (iPad/desktop) or shows the Add-to-Home-Screen guide (iPhone).
+    // Hidden when already running as a home-screen app.
+    this.touch.setButtonVisible('fullscreen', canExpand());
     this.attach();
   }
 
@@ -481,7 +483,7 @@ export class Input {
     const py = this.mouse.y;
     this.display.clientToLogical(e.clientX, e.clientY, this.mouse);
     this.mouseInside =
-      this.mouse.x >= 0 && this.mouse.y >= 0 && this.mouse.x <= CONFIG.view.width && this.mouse.y <= CONFIG.view.height;
+      this.mouse.x >= 0 && this.mouse.y >= 0 && this.mouse.x <= VIEW.width && this.mouse.y <= VIEW.height;
     const moved = len(this.mouse.x - px, this.mouse.y - py);
     if (moved > 0) this.mouseMovedPending = true;
     this.mouseTravel += moved;

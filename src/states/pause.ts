@@ -1,10 +1,11 @@
-import { COLORS, CONFIG } from '../config';
+import { COLORS } from '../config';
 import type { Game } from '../game';
 import { Action } from '../input/bindings';
 import { renderPrompts } from '../ui/prompts';
 import { glowText } from '../ui/text';
 import type { PlayState } from './play';
 import type { GameState } from './state';
+import { VIEW } from '../core/view';
 
 interface MenuItem {
   label: string;
@@ -67,19 +68,19 @@ export class PauseState implements GameState {
   }
 
   private itemY(i: number): number {
-    return CONFIG.view.height / 2 + i * 46;
+    return VIEW.height / 2 + i * 46;
   }
 
   private itemAt(x: number, y: number): number {
     for (let i = 0; i < this.items.length; i++) {
-      if (Math.abs(x - CONFIG.view.width / 2) < 170 && Math.abs(y - this.itemY(i)) < 22) return i;
+      if (Math.abs(x - VIEW.width / 2) < 170 && Math.abs(y - this.itemY(i)) < 22) return i;
     }
     return -1;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
-    const W = CONFIG.view.width;
-    const H = CONFIG.view.height;
+    const W = VIEW.width;
+    const H = VIEW.height;
     const fade = Math.min(1, this.age / 0.12);
 
     ctx.save();
