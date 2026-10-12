@@ -7,6 +7,11 @@ export const CONFIG = {
     /** Logical resolution. The canvas is scaled to fit the window at this aspect ratio. */
     width: 1280,
     height: 720,
+    /**
+     * Upper bound on devicePixelRatio for the backing canvas. iPhones report 3;
+     * 2 is visually indistinguishable here and costs ~44% fewer pixels to fill.
+     */
+    maxDpr: 2,
   },
 
   loop: {
@@ -56,6 +61,21 @@ export const CONFIG = {
       iframeExtra: 0.12,
     },
     muzzleOffset: 20,
+  },
+
+  /** Virtual controls for phones/tablets (logical coordinates, 1280x720 space). */
+  touch: {
+    stickRadius: 64,
+    stickDeadzone: 0.12,
+    /** Where faint "MOVE"/"AIM" hints sit while no finger is on that side. */
+    moveHint: { x: 170, y: 575 },
+    aimHint: { x: 1050, y: 590 },
+    buttons: {
+      dash: { x: 1172, y: 455, r: 44, hit: 60 },
+      weapon: { x: 1196, y: 335, r: 28, hit: 44 },
+      pause: { x: 1254, y: 20, r: 14, hit: 40 },
+      fullscreen: { x: 26, y: 20, r: 14, hit: 40 },
+    },
   },
 
   projectiles: {

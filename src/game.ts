@@ -35,6 +35,11 @@ export class Game {
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) lost();
     });
+    // Phones/tablets rotated to portrait get a "rotate" overlay (see index.html); pause underneath it.
+    const portrait = window.matchMedia('(orientation: portrait) and (pointer: coarse)');
+    portrait.addEventListener('change', () => {
+      if (portrait.matches) lost();
+    });
   }
 
   get top(): GameState | undefined {
@@ -58,6 +63,7 @@ export class Game {
 
   update(dt: number): void {
     this.time += dt;
+    this.input.setTouchGameplay(this.top?.touchControls === true);
     this.input.update();
     if (this.input.pressed(Action.DEBUG)) this.debug = !this.debug;
     this.toasts.update(dt);

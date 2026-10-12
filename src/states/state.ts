@@ -6,6 +6,8 @@
 export interface GameState {
   /** If true, the state below is rendered first (this one draws on top). */
   readonly overlay: boolean;
+  /** If true, touches drive the virtual sticks/buttons; otherwise they're menu taps. */
+  readonly touchControls?: boolean;
   enter?(): void;
   exit?(): void;
   update(dt: number): void;

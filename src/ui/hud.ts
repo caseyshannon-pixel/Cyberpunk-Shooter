@@ -55,7 +55,8 @@ export function renderHud(ctx: CanvasRenderingContext2D, player: Player, input: 
   const def = WEAPONS[player.weapon];
   glowText(ctx, `${def.name}  ${def.ammo === null ? '∞' : def.ammo}`, W - 56, 20, { size: 15, color: def.color, align: 'right' });
 
-  // Control prompts (bottom).
+  // Control prompts (bottom). Touch players get the on-screen controls instead.
+  if (input.device === 'touch') return;
   renderPrompts(ctx, input.device === 'gamepad' ? GAMEPLAY_PROMPTS_PAD : GAMEPLAY_PROMPTS_KB, input, W / 2, H - 20, 'center', 12, 0.75);
 }
 

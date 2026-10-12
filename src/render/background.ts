@@ -49,14 +49,50 @@ export function renderBackground(ctx: CanvasRenderingContext2D, time: number): v
   ctx.restore();
 }
 
+interface ArenaCache {
+  arena: Arena;
+  scale: number;
+  canvas: HTMLCanvasElement;
+}
+let arenaCache: ArenaCache | null = null;
+
+/**
+ * Walls and obstacles never change, and canvas shadowBlur is expensive
+ * (especially in Safari on iPhone/iPad), so we draw them once into an
+ * offscreen canvas at the current pixel ratio and blit that every frame.
+ */
 export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: number): void {
+  const scale = ctx.getTransform().a;
+  if (!arenaCache || arenaCache.arena !== arena || arenaCache.scale !== scale) {
+    const canvas = arenaCache?.canvas ?? document.createElement('canvas');
+    canvas.width = Math.ceil(CONFIG.view.width * scale);
+    canvas.height = Math.ceil(CONFIG.view.height * scale);
+    const c = canvas.getContext('2d');
+    if (!c) return;
+    c.setTransform(scale, 0, 0, scale, 0, 0);
+    drawArena(c, arena, scale);
+    arenaCache = { arena, scale, canvas };
+  }
+
+  const W = CONFIG.view.width;
+  const H = CONFIG.view.height;
+  ctx.drawImage(arenaCache.canvas, 0, 0, W, H);
+  // Slow neon "breathing": add a faint extra copy on top.
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.globalAlpha = 0.18 + Math.sin(time * 2) * 0.12;
+  ctx.drawImage(arenaCache.canvas, 0, 0, W, H);
+  ctx.restore();
+}
+
+function drawArena(ctx: CanvasRenderingContext2D, arena: Arena, scale: number): void {
   const b = arena.bounds;
-  const pulse = 0.75 + Math.sin(time * 2) * 0.25;
+  // shadowBlur is in device pixels and ignores the transform; scale it so the glow matches on every DPR.
 
   ctx.save();
   // Outer walls.
   ctx.shadowColor = COLORS.wall;
-  ctx.shadowBlur = 20 * pulse;
+  ctx.shadowBlur = 10 * scale;
   ctx.strokeStyle = COLORS.wall;
   ctx.lineWidth = 3;
   ctx.strokeRect(b.x - 1.5, b.y - 1.5, b.w + 3, b.h + 3);
@@ -89,7 +125,7 @@ export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: n
     ctx.globalAlpha = 1;
 
     ctx.shadowColor = edge;
-    ctx.shadowBlur = 14 * pulse;
+    ctx.shadowBlur = 7 * scale;
     ctx.strokeStyle = edge;
     ctx.lineWidth = 2;
     ctx.strokeRect(o.x + 1, o.y + 1, o.w - 2, o.h - 2);

@@ -103,6 +103,13 @@ export const KEYBOARD_MOVE = {
   right: ['KeyD', 'ArrowRight'],
 } as const;
 
+/**
+ * Keys that toggle fullscreen. Handled directly inside the keydown event (not
+ * via the per-tick action system) because browsers only allow fullscreen from
+ * within a user-gesture event handler.
+ */
+export const FULLSCREEN_KEYS: ReadonlySet<string> = new Set(['KeyF']);
+
 /** Keys whose default browser behaviour (scrolling, quick-find…) we suppress. */
 export const PREVENT_DEFAULT_KEYS: ReadonlySet<string> = new Set([
   'Space',

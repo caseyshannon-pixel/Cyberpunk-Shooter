@@ -2,20 +2,50 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-    <meta name="theme-color" content="#05010d" />
+    <!-- viewport-fit=cover lets us use the full iPhone screen; safe areas are handled in CSS. -->
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#020008" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="format-detection" content="telephone=no" />
+
+    <!-- "Add to Home Screen" on iOS/iPadOS launches full-screen with no Safari UI. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="NEON//GRID" />
+    <link rel="apple-touch-icon" href="./icons/apple-touch-icon.png" />
+    <link rel="icon" type="image/svg+xml" href="./icons/icon.svg" />
+    <link rel="manifest" href="./manifest.webmanifest" />
+
     <title>NEON//GRID</title>
     <style>
-      html, body {
+      html,
+      body {
         margin: 0;
         padding: 0;
         width: 100%;
         height: 100%;
         background: #000;
         overflow: hidden;
+        overscroll-behavior: none;
+        /* No scrolling, pinch-zoom, double-tap zoom, text selection or long-press callouts. */
         touch-action: none;
+        -webkit-user-select: none;
+        user-select: none;
+        -webkit-touch-callout: none;
+        -webkit-tap-highlight-color: transparent;
+        -webkit-text-size-adjust: 100%;
       }
-      body {
+      /* position: fixed + inset tracks iOS Safari's dynamic toolbars better than 100vh. */
+      #stage {
+        position: fixed;
+        inset: 0;
+        box-sizing: border-box;
+        padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom)
+          env(safe-area-inset-left);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -24,12 +54,50 @@
         display: block;
         cursor: none;
         outline: none;
-        image-rendering: auto;
+        touch-action: none;
+      }
+      #rotate {
+        display: none;
+        position: fixed;
+        inset: 0;
+        z-index: 10;
+        background: #020008;
+        color: #00f0ff;
+        font: bold 18px/1.5 Menlo, Consolas, 'DejaVu Sans Mono', monospace;
+        letter-spacing: 0.15em;
+        text-align: center;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        text-shadow: 0 0 10px #00f0ff;
+      }
+      #rotate .phone {
+        width: 46px;
+        height: 80px;
+        border: 3px solid #ff2bd6;
+        border-radius: 8px;
+        box-shadow: 0 0 14px #ff2bd6;
+        margin-bottom: 28px;
+        animation: tilt 2s ease-in-out infinite;
+      }
+      @keyframes tilt {
+        0%, 30% { transform: rotate(0deg); }
+        60%, 100% { transform: rotate(-90deg); }
+      }
+      /* Touch-first devices held in portrait: ask for landscape. */
+      @media (orientation: portrait) and (pointer: coarse) {
+        #rotate {
+          display: flex;
+        }
       }
     </style>
   </head>
   <body>
-    <canvas id="game" tabindex="0"></canvas>
+    <div id="stage"><canvas id="game" tabindex="0"></canvas></div>
+    <div id="rotate">
+      <div class="phone"></div>
+      <div>ROTATE TO LANDSCAPE</div>
+    </div>
     <script type="module" src="/src/main.ts"></script>
   </body>
 </html>

@@ -1,10 +1,12 @@
 import { CONFIG } from '../config';
 import type { Display } from '../core/display';
+import { fullscreenSupported, isStandalone, toggleFullscreen } from '../core/fullscreen';
 import { applyRadialDeadzone, len, vec, type Vec2 } from '../core/math';
 import {
   ALL_ACTIONS,
   ANALOG_BUTTONS,
   Action,
+  FULLSCREEN_KEYS,
   GAMEPAD_BINDINGS,
   KEYBOARD_BINDINGS,
   KEYBOARD_MOVE,
@@ -12,8 +14,9 @@ import {
   PREVENT_DEFAULT_KEYS,
   PadAxes,
 } from './bindings';
+import { TouchControls } from './touch';
 
-export type Device = 'keyboard' | 'gamepad';
+export type Device = 'keyboard' | 'gamepad' | 'touch';
 export type PadStyle = 'xbox' | 'playstation' | 'generic';
 
 export interface PadInfo {
@@ -43,22 +46,40 @@ function detectStyle(id: string): PadStyle {
   return 'generic';
 }
 
+/** `PointerEvent.buttons` bit → `MouseEvent.button` index. */
+const MOUSE_BUTTON_BITS: readonly [bit: number, button: number][] = [
+  [1, 0],
+  [2, 2],
+  [4, 1],
+];
+
+/** Phones/tablets without a precise pointer start in touch mode so the right prompts show immediately. */
+function prefersTouch(): boolean {
+  return window.matchMedia('(pointer: coarse)').matches && !window.matchMedia('(any-pointer: fine)').matches;
+}
+
 /**
  * Input abstraction. Each fixed update calls `update()`, which polls the
- * gamepad and folds keyboard/mouse events into per-action state. Game code
- * only asks about actions: `isDown(Action.FIRE)`, `pressed(Action.DASH)`,
- * `move`, `getAimDirection()`.
+ * gamepad and folds keyboard / mouse / touch events into per-action state.
+ * Game code only asks about actions: `isDown(Action.FIRE)`,
+ * `pressed(Action.DASH)`, `move`, `getAimDirection()`, `taps`.
  */
 export class Input {
-  /** Most recently used device — drives on-screen prompts. */
-  device: Device = 'keyboard';
+  /** Most recently used device — drives on-screen prompts and touch HUD visibility. */
+  device: Device = prefersTouch() ? 'touch' : 'keyboard';
   /** Normalised movement vector, magnitude 0..1. */
   readonly move: Vec2 = vec();
-  /** Deadzoned right stick, magnitude 0..1. */
+  /** Deadzoned aim stick (gamepad right stick or touch right stick), magnitude 0..1. */
   readonly aimStick: Vec2 = vec();
   /** Mouse position in logical game coordinates. */
   readonly mouse: Vec2 = vec(CONFIG.view.width / 2, CONFIG.view.height / 2);
   mouseInside = false;
+  /** Mouse moved since last tick (menus use it for hover selection). */
+  mouseMoved = false;
+  /** Clicks / taps since the last tick, in logical coordinates (for menus). */
+  readonly taps: Vec2[] = [];
+
+  readonly touch: TouchControls;
 
   /** Active controller, if any. */
   pad: PadInfo | null = null;
@@ -68,8 +89,11 @@ export class Input {
   private readonly keysLatched = new Set<string>();
   private readonly mouseDown = new Set<number>();
   private readonly mouseLatched = new Set<number>();
+  private mouseButtons = 0;
   private readonly wheelLatched = new Set<Action>();
   private mouseTravel = 0;
+  private mouseMovedPending = false;
+  private readonly pendingTaps: Vec2[] = [];
 
   private readonly curr = new Map<Action, boolean>();
   private readonly prev = new Map<Action, boolean>();
@@ -77,7 +101,9 @@ export class Input {
 
   private readonly knownPads = new Map<number, PadInfo>();
   private readonly padButtons: boolean[] = [];
-  private readonly rawStick = vec();
+  private readonly padMove = vec();
+  private readonly padAim = vec();
+  private readonly tmp = vec();
 
   private readonly connectListeners: PadListener[] = [];
   private readonly disconnectListeners: PadListener[] = [];
@@ -87,6 +113,12 @@ export class Input {
       this.curr.set(a, false);
       this.prev.set(a, false);
     }
+    this.touch = new TouchControls(
+      (x, y) => this.pendingTaps.push({ x, y }),
+      () => toggleFullscreen(),
+    );
+    // No fullscreen button where it can't work (iPhone Safari) or isn't needed (home-screen app).
+    this.touch.setButtonVisible('fullscreen', fullscreenSupported() && !isStandalone());
     this.attach();
   }
 
@@ -110,8 +142,8 @@ export class Input {
     this.consumed.add(action);
   }
 
-  /** Any menu-ish "confirm" style input (used by "press any button" screens). */
   anyPressed(): boolean {
+    if (this.taps.length) return true;
     for (const a of ALL_ACTIONS) if (this.pressed(a)) return true;
     return false;
   }
@@ -119,10 +151,10 @@ export class Input {
   /**
    * Direction the player wants to aim from (fromX, fromY), written into `out`
    * as a unit vector. Returns false when there is no aim input this tick
-   * (gamepad right stick at rest) so the caller can keep its last facing.
+   * (stick at rest) so the caller can keep its last facing.
    */
   getAimDirection(fromX: number, fromY: number, out: Vec2): boolean {
-    if (this.device === 'gamepad') {
+    if (this.device !== 'keyboard') {
       const m = len(this.aimStick.x, this.aimStick.y);
       if (m <= 0) return false;
       out.x = this.aimStick.x / m;
@@ -136,6 +168,11 @@ export class Input {
     out.x = dx / d;
     out.y = dy / d;
     return true;
+  }
+
+  /** Enable virtual sticks/buttons (gameplay) or treat every touch as a menu tap. */
+  setTouchGameplay(on: boolean): void {
+    this.touch.gameplay = on;
   }
 
   onPadConnected(fn: PadListener): void {
@@ -177,6 +214,12 @@ export class Input {
     for (const a of ALL_ACTIONS) this.prev.set(a, this.curr.get(a) === true);
     this.consumed.clear();
 
+    this.taps.length = 0;
+    for (const t of this.pendingTaps) this.taps.push(t);
+    this.pendingTaps.length = 0;
+    this.mouseMoved = this.mouseMovedPending;
+    this.mouseMovedPending = false;
+
     this.pollGamepads();
 
     // Keyboard movement.
@@ -192,9 +235,10 @@ export class Input {
       ky /= kl;
     }
 
-    // Combine keyboard + stick, clamp to unit length.
-    let mx = kx + this.rawStick.x;
-    let my = ky + this.rawStick.y;
+    // Combine keyboard + gamepad stick + touch stick, clamp to unit length.
+    const tl = this.touch.left.value;
+    let mx = kx + this.padMove.x + tl.x;
+    let my = ky + this.padMove.y + tl.y;
     const ml = len(mx, my);
     if (ml > 1) {
       mx /= ml;
@@ -203,8 +247,13 @@ export class Input {
     this.move.x = mx;
     this.move.y = my;
 
-    const autoFire =
-      this.device === 'gamepad' && len(this.aimStick.x, this.aimStick.y) > CONFIG.input.aimFireThreshold;
+    // Aim: the touch stick wins while a finger is on it, otherwise the right stick.
+    const tr = this.touch.right;
+    const src = tr.active ? tr.value : this.padAim;
+    this.aimStick.x = src.x;
+    this.aimStick.y = src.y;
+
+    const autoFire = this.device !== 'keyboard' && len(this.aimStick.x, this.aimStick.y) > CONFIG.input.aimFireThreshold;
     const t = CONFIG.input.menuStickThreshold;
 
     for (const a of ALL_ACTIONS) {
@@ -235,21 +284,23 @@ export class Input {
         }
       }
       if (!down && this.wheelLatched.has(a)) down = true;
+      if (!down && this.touch.isActionDown(a)) down = true;
       this.curr.set(a, down);
     }
 
     // Virtual actions derived from analog input.
     if (autoFire) this.curr.set(Action.FIRE, true);
     if (this.pad) {
-      if (this.rawStick.y < -t) this.curr.set(Action.MENU_UP, true);
-      if (this.rawStick.y > t) this.curr.set(Action.MENU_DOWN, true);
-      if (this.rawStick.x < -t) this.curr.set(Action.MENU_LEFT, true);
-      if (this.rawStick.x > t) this.curr.set(Action.MENU_RIGHT, true);
+      if (this.padMove.y < -t) this.curr.set(Action.MENU_UP, true);
+      if (this.padMove.y > t) this.curr.set(Action.MENU_DOWN, true);
+      if (this.padMove.x < -t) this.curr.set(Action.MENU_LEFT, true);
+      if (this.padMove.x > t) this.curr.set(Action.MENU_RIGHT, true);
     }
 
     this.keysLatched.clear();
     this.mouseLatched.clear();
     this.wheelLatched.clear();
+    this.touch.endTick();
   }
 
   // ---------------------------------------------------------------- gamepad
@@ -258,10 +309,8 @@ export class Input {
     const pads = navigator.getGamepads ? navigator.getGamepads() : [];
     this.reconcilePads(pads);
 
-    this.rawStick.x = 0;
-    this.rawStick.y = 0;
-    this.aimStick.x = 0;
-    this.aimStick.y = 0;
+    this.padMove.x = this.padMove.y = 0;
+    this.padAim.x = this.padAim.y = 0;
     this.padButtons.length = 0;
     if (!this.pad) return;
 
@@ -279,10 +328,10 @@ export class Input {
     if (!gp || !gp.connected) return;
 
     const dz = CONFIG.input.stickDeadzone;
-    applyRadialDeadzone(gp.axes[PadAxes.MOVE.x] ?? 0, gp.axes[PadAxes.MOVE.y] ?? 0, dz, this.rawStick);
-    applyRadialDeadzone(gp.axes[PadAxes.AIM.x] ?? 0, gp.axes[PadAxes.AIM.y] ?? 0, dz, this.aimStick);
+    applyRadialDeadzone(gp.axes[PadAxes.MOVE.x] ?? 0, gp.axes[PadAxes.MOVE.y] ?? 0, dz, this.padMove);
+    applyRadialDeadzone(gp.axes[PadAxes.AIM.x] ?? 0, gp.axes[PadAxes.AIM.y] ?? 0, dz, this.padAim);
 
-    let active = this.rawStick.x !== 0 || this.rawStick.y !== 0 || this.aimStick.x !== 0 || this.aimStick.y !== 0;
+    let active = this.padMove.x !== 0 || this.padMove.y !== 0 || this.padAim.x !== 0 || this.padAim.y !== 0;
     for (let i = 0; i < gp.buttons.length; i++) {
       const b = gp.buttons[i];
       const down = ANALOG_BUTTONS.has(i) ? b.value > CONFIG.input.triggerThreshold : b.pressed;
@@ -318,7 +367,7 @@ export class Input {
       if (wasActive) {
         const next = this.knownPads.values().next();
         this.pad = next.done ? null : next.value;
-        if (!this.pad) this.device = 'keyboard';
+        if (!this.pad && this.device === 'gamepad') this.device = prefersTouch() ? 'touch' : 'keyboard';
       }
       for (const fn of this.disconnectListeners) fn(info, usingPad);
     }
@@ -335,6 +384,10 @@ export class Input {
     window.addEventListener('keydown', (e) => {
       if (PREVENT_DEFAULT_KEYS.has(e.code)) e.preventDefault();
       if (e.repeat) return;
+      if (FULLSCREEN_KEYS.has(e.code)) {
+        e.preventDefault();
+        toggleFullscreen();
+      }
       this.keysDown.add(e.code);
       this.keysLatched.add(e.code);
       this.device = 'keyboard';
@@ -347,32 +400,30 @@ export class Input {
       if (document.hidden) this.releaseAll();
     });
 
-    const canvas = this.display.canvas;
-    window.addEventListener('mousemove', (e) => {
-      const px = this.mouse.x;
-      const py = this.mouse.y;
-      this.display.clientToLogical(e.clientX, e.clientY, this.mouse);
-      this.mouseTravel += len(this.mouse.x - px, this.mouse.y - py);
-      if (this.mouseTravel > CONFIG.input.mouseSwitchDistance) {
-        this.device = 'keyboard';
-        this.mouseTravel = 0;
-      }
+    // Pointer Events cover mouse, trackpad (incl. iPad), touch and Apple Pencil
+    // with one API, and unlike mouse events they don't produce the "fake" mouse
+    // events Safari synthesises after a touch.
+    window.addEventListener('pointerdown', this.onPointerDown, { passive: false });
+    window.addEventListener('pointermove', this.onPointerMove, { passive: false });
+    window.addEventListener('pointerup', this.onPointerUp);
+    window.addEventListener('pointercancel', (e) => {
+      if (e.pointerType === 'mouse') this.setMouseButtons(0);
+      else this.touch.up(e.pointerId, true);
     });
-    canvas.addEventListener('mouseenter', () => (this.mouseInside = true));
-    canvas.addEventListener('mouseleave', () => (this.mouseInside = false));
-    canvas.addEventListener('mousedown', (e) => {
-      e.preventDefault();
-      canvas.focus();
-      this.mouseDown.add(e.button);
-      this.mouseLatched.add(e.button);
-      this.device = 'keyboard';
-      this.mouseTravel = 0;
+    document.documentElement.addEventListener('pointerleave', (e) => {
+      if (e.pointerType === 'mouse') this.mouseInside = false;
     });
-    window.addEventListener('mouseup', (e) => {
-      this.mouseDown.delete(e.button);
-    });
-    canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-    canvas.addEventListener(
+
+    // Belt and braces for iOS: block scroll / bounce / pinch-zoom / double-tap zoom.
+    const block = (e: Event) => e.preventDefault();
+    document.addEventListener('touchstart', block, { passive: false });
+    document.addEventListener('touchmove', block, { passive: false });
+    document.addEventListener('gesturestart', block as EventListener, { passive: false });
+    document.addEventListener('gesturechange', block as EventListener, { passive: false });
+    document.addEventListener('dblclick', block, { passive: false });
+    window.addEventListener('contextmenu', block);
+
+    this.display.canvas.addEventListener(
       'wheel',
       (e) => {
         e.preventDefault();
@@ -387,8 +438,76 @@ export class Input {
     window.addEventListener('gamepaddisconnected', () => this.reconcilePads(navigator.getGamepads()));
   }
 
+  private onPointerDown = (e: PointerEvent): void => {
+    const p = this.display.clientToLogical(e.clientX, e.clientY, this.tmp);
+    if (e.pointerType === 'mouse') {
+      e.preventDefault();
+      this.display.canvas.focus();
+      this.updateMousePos(e);
+      this.device = 'keyboard';
+      this.mouseTravel = 0;
+      if (e.button === 0) this.pendingTaps.push({ x: p.x, y: p.y });
+      this.setMouseButtons(e.buttons);
+      return;
+    }
+    // touch / pen
+    e.preventDefault();
+    this.device = 'touch';
+    this.touch.down(e.pointerId, p.x, p.y);
+  };
+
+  private onPointerMove = (e: PointerEvent): void => {
+    if (e.pointerType === 'mouse') {
+      this.updateMousePos(e);
+      // Pressing a second mouse button while one is held arrives as a pointermove.
+      if (e.buttons !== this.mouseButtons) this.setMouseButtons(e.buttons);
+      return;
+    }
+    e.preventDefault();
+    const p = this.display.clientToLogical(e.clientX, e.clientY, this.tmp);
+    this.touch.move(e.pointerId, p.x, p.y);
+  };
+
+  private onPointerUp = (e: PointerEvent): void => {
+    if (e.pointerType === 'mouse') {
+      this.setMouseButtons(e.buttons);
+      return;
+    }
+    this.touch.up(e.pointerId);
+  };
+
+  private updateMousePos(e: PointerEvent): void {
+    const px = this.mouse.x;
+    const py = this.mouse.y;
+    this.display.clientToLogical(e.clientX, e.clientY, this.mouse);
+    this.mouseInside =
+      this.mouse.x >= 0 && this.mouse.y >= 0 && this.mouse.x <= CONFIG.view.width && this.mouse.y <= CONFIG.view.height;
+    const moved = len(this.mouse.x - px, this.mouse.y - py);
+    if (moved > 0) this.mouseMovedPending = true;
+    this.mouseTravel += moved;
+    if (this.mouseTravel > CONFIG.input.mouseSwitchDistance) {
+      this.device = 'keyboard';
+      this.mouseTravel = 0;
+    }
+  }
+
+  private setMouseButtons(buttons: number): void {
+    for (const [bit, button] of MOUSE_BUTTON_BITS) {
+      const now = (buttons & bit) !== 0;
+      const was = (this.mouseButtons & bit) !== 0;
+      if (now && !was) {
+        this.mouseDown.add(button);
+        this.mouseLatched.add(button);
+      } else if (!now && was) {
+        this.mouseDown.delete(button);
+      }
+    }
+    this.mouseButtons = buttons;
+  }
+
   private releaseAll(): void {
     this.keysDown.clear();
-    this.mouseDown.clear();
+    this.setMouseButtons(0);
+    this.touch.releaseAll();
   }
 }

@@ -41,6 +41,21 @@ export class PauseState implements GameState {
   update(dt: number): void {
     this.age += dt;
     const input = this.game.input;
+
+    // Mouse hover and click / touch tap on menu items.
+    if (input.mouseMoved && input.device === 'keyboard') {
+      const hover = this.itemAt(input.mouse.x, input.mouse.y);
+      if (hover >= 0) this.selected = hover;
+    }
+    for (const t of input.taps) {
+      const hit = this.itemAt(t.x, t.y);
+      if (hit >= 0) {
+        this.selected = hit;
+        this.items[hit].run();
+        return;
+      }
+    }
+
     if (input.pressed(Action.MENU_UP)) this.selected = (this.selected + this.items.length - 1) % this.items.length;
     if (input.pressed(Action.MENU_DOWN)) this.selected = (this.selected + 1) % this.items.length;
 
@@ -49,6 +64,17 @@ export class PauseState implements GameState {
     } else if (input.pressed(Action.PAUSE) || input.pressed(Action.BACK)) {
       this.resume();
     }
+  }
+
+  private itemY(i: number): number {
+    return CONFIG.view.height / 2 + i * 46;
+  }
+
+  private itemAt(x: number, y: number): number {
+    for (let i = 0; i < this.items.length; i++) {
+      if (Math.abs(x - CONFIG.view.width / 2) < 170 && Math.abs(y - this.itemY(i)) < 22) return i;
+    }
+    return -1;
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -70,7 +96,7 @@ export class PauseState implements GameState {
 
     this.items.forEach((item, i) => {
       const sel = i === this.selected;
-      const y = H / 2 + i * 46;
+      const y = this.itemY(i);
       glowText(ctx, sel ? `>  ${item.label}  <` : item.label, W / 2, y, {
         size: sel ? 26 : 22,
         color: sel ? COLORS.cyan : '#8c7fb0',
@@ -81,6 +107,10 @@ export class PauseState implements GameState {
       });
     });
 
+    if (this.game.input.device === 'touch') {
+      glowText(ctx, 'TAP AN OPTION', W / 2, H / 2 + 150, { size: 14, color: COLORS.white, align: 'center', alpha: fade * 0.8, blur: 0 });
+      return;
+    }
     renderPrompts(
       ctx,
       [

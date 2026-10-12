@@ -4,6 +4,7 @@ import type { Game } from '../game';
 import { Action } from '../input/bindings';
 import { renderArena, renderBackground } from '../render/background';
 import { renderDashRing, renderHud, renderReticle } from '../ui/hud';
+import { renderTouchHud } from '../ui/touchHud';
 import { Arena } from '../world/arena';
 import { PauseState } from './pause';
 import type { GameState } from './state';
@@ -11,6 +12,7 @@ import type { GameState } from './state';
 /** The core gameplay state: owns the world for one run. */
 export class PlayState implements GameState {
   readonly overlay = false;
+  readonly touchControls = true;
   arena!: Arena;
   player!: Player;
   readonly projectiles = new Projectiles();
@@ -62,5 +64,6 @@ export class PlayState implements GameState {
     this.player.render(ctx, alpha, this.time);
     renderReticle(ctx, this.player, this.game.input, alpha, this.time);
     renderHud(ctx, this.player, this.game.input);
+    renderTouchHud(ctx, this.game.input, this.player);
   }
 }

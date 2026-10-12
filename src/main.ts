@@ -1,3 +1,4 @@
+import './core/polyfills';
 import { Display } from './core/display';
 import { FixedLoop } from './core/loop';
 import { Game } from './game';
