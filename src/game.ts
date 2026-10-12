@@ -17,6 +17,10 @@ export class Game {
   readonly toasts = new Toasts();
   readonly audio = new GameAudio();
   private audioHintShown = false;
+  /** Screen fade: >0 fading out toward `pending`, then fading back in. */
+  private fade = 0;
+  private fadeDir: -1 | 0 | 1 = 0;
+  private pending: (() => GameState) | null = null;
   private readonly stack: GameState[] = [];
   /** Real seconds since boot (keeps running while paused). */
   time = 0;
@@ -71,6 +75,33 @@ export class Game {
     this.push(state);
   }
 
+  /** Fade to black, replace the stack with `make()`, fade back in. */
+  transition(make: () => GameState): void {
+    if (this.fadeDir === 1) return;
+    this.pending = make;
+    this.fadeDir = 1;
+  }
+
+  get transitioning(): boolean {
+    return this.fadeDir !== 0;
+  }
+
+  private updateFade(dt: number): void {
+    const speed = 1 / 0.22;
+    if (this.fadeDir === 1) {
+      this.fade = Math.min(1, this.fade + dt * speed);
+      if (this.fade >= 1 && this.pending) {
+        const make = this.pending;
+        this.pending = null;
+        this.set(make());
+        this.fadeDir = -1;
+      }
+    } else if (this.fadeDir === -1) {
+      this.fade = Math.max(0, this.fade - dt * speed);
+      if (this.fade <= 0) this.fadeDir = 0;
+    }
+  }
+
   update(dt: number): void {
     this.time += dt;
     this.input.setTouchGameplay(this.top?.touchControls === true);
@@ -82,7 +113,9 @@ export class Game {
       this.audioHintShown = true;
       this.toasts.show('Press any key or tap the screen to enable sound', COLORS.yellow, 4);
     }
-    this.top?.update(dt);
+    this.updateFade(dt);
+    // While fading out, freeze the outgoing screen so it can't react twice.
+    if (this.fadeDir !== 1) this.top?.update(dt);
   }
 
   render(alpha: number, frameDt: number): void {
@@ -105,6 +138,13 @@ export class Game {
       this.stack[i].render(ctx, alpha);
     }
 
+    if (this.fade > 0) {
+      ctx.save();
+      ctx.globalAlpha = this.fade;
+      ctx.fillStyle = '#020008';
+      ctx.fillRect(0, 0, this.display.width, this.display.height);
+      ctx.restore();
+    }
     this.toasts.render(ctx);
     if (settings.get().crt) renderCrt(ctx, this.time);
     if (this.debug) this.renderDebug(ctx);

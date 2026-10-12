@@ -1,22 +1,19 @@
 import { COLORS } from '../config';
+import { VIEW } from '../core/view';
 import type { Game } from '../game';
 import { Action } from '../input/bindings';
+import { Menu } from '../ui/menu';
 import { renderPrompts } from '../ui/prompts';
 import { glowText } from '../ui/text';
+import { ControlsState } from './controls';
 import type { PlayState } from './play';
 import { SettingsState } from './settings';
 import type { GameState } from './state';
-import { VIEW } from '../core/view';
-
-interface MenuItem {
-  label: string;
-  run: () => void;
-}
+import { TitleState } from './title';
 
 export class PauseState implements GameState {
   readonly overlay = true;
-  private selected = 0;
-  private readonly items: MenuItem[];
+  private readonly menu: Menu;
   private age = 0;
 
   constructor(
@@ -24,17 +21,23 @@ export class PauseState implements GameState {
     private readonly play: PlayState,
     private readonly reason?: string,
   ) {
-    this.items = [
-      { label: 'RESUME', run: () => this.resume() },
-      { label: 'SETTINGS', run: () => this.game.push(new SettingsState(this.game)) },
-      {
-        label: 'RESTART',
-        run: () => {
-          this.play.reset();
-          this.resume();
+    this.menu = new Menu(
+      game,
+      [
+        { label: 'RESUME', run: () => this.resume() },
+        { label: 'SETTINGS', run: () => game.push(new SettingsState(game)) },
+        { label: 'CONTROLS', run: () => game.push(new ControlsState(game)) },
+        {
+          label: 'RESTART',
+          run: () => {
+            this.play.reset();
+            this.resume();
+          },
         },
-      },
-    ];
+        { label: 'QUIT TO TITLE', run: () => game.transition(() => new TitleState(game)) },
+      ],
+      { y: VIEW.height / 2 - 30, spacing: 44 },
+    );
   }
 
   enter(): void {
@@ -51,58 +54,11 @@ export class PauseState implements GameState {
     this.game.pop();
   }
 
-  private run(i: number): void {
-    this.selected = i;
-    if (this.items[i].label !== 'RESUME') this.game.audio.sfx.play('uiSelect');
-    this.items[i].run();
-  }
-
   update(dt: number): void {
     this.age += dt;
+    if (this.menu.update()) return;
     const input = this.game.input;
-
-    // Mouse hover and click / touch tap on menu items.
-    if (input.mouseMoved && input.device === 'keyboard') {
-      const hover = this.itemAt(input.mouse.x, input.mouse.y);
-      if (hover >= 0 && hover !== this.selected) {
-        this.selected = hover;
-        this.game.audio.sfx.play('uiMove');
-      }
-    }
-    for (const t of input.taps) {
-      const hit = this.itemAt(t.x, t.y);
-      if (hit >= 0) {
-        this.run(hit);
-        return;
-      }
-    }
-
-    const n = this.items.length;
-    if (input.pressed(Action.MENU_UP)) {
-      this.selected = (this.selected + n - 1) % n;
-      this.game.audio.sfx.play('uiMove');
-    }
-    if (input.pressed(Action.MENU_DOWN)) {
-      this.selected = (this.selected + 1) % n;
-      this.game.audio.sfx.play('uiMove');
-    }
-
-    if (input.pressed(Action.CONFIRM)) {
-      this.run(this.selected);
-    } else if (input.pressed(Action.PAUSE) || input.pressed(Action.BACK)) {
-      this.resume();
-    }
-  }
-
-  private itemY(i: number): number {
-    return VIEW.height / 2 + i * 46;
-  }
-
-  private itemAt(x: number, y: number): number {
-    for (let i = 0; i < this.items.length; i++) {
-      if (Math.abs(x - VIEW.width / 2) < 170 && Math.abs(y - this.itemY(i)) < 22) return i;
-    }
-    return -1;
+    if (input.pressed(Action.PAUSE) || input.pressed(Action.BACK)) this.resume();
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -116,27 +72,17 @@ export class PauseState implements GameState {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
 
-    glowText(ctx, 'PAUSED', W / 2, H / 2 - 110, { size: 56, color: COLORS.white, glow: COLORS.magenta, blur: 24, align: 'center', alpha: fade });
+    glowText(ctx, 'PAUSED', W / 2, H / 2 - 150, { size: 56, color: COLORS.white, glow: COLORS.magenta, blur: 24, align: 'center', alpha: fade });
     if (this.reason) {
       const blink = 0.6 + Math.sin(this.age * 5) * 0.4;
-      glowText(ctx, this.reason, W / 2, H / 2 - 60, { size: 16, color: COLORS.magenta, align: 'center', alpha: fade * blink });
+      glowText(ctx, this.reason, W / 2, H / 2 - 100, { size: 16, color: COLORS.magenta, align: 'center', alpha: fade * blink });
     }
 
-    this.items.forEach((item, i) => {
-      const sel = i === this.selected;
-      const y = this.itemY(i);
-      glowText(ctx, sel ? `>  ${item.label}  <` : item.label, W / 2, y, {
-        size: sel ? 26 : 22,
-        color: sel ? COLORS.cyan : '#8c7fb0',
-        glow: sel ? COLORS.cyan : 'transparent',
-        blur: sel ? 16 : 0,
-        align: 'center',
-        alpha: fade,
-      });
-    });
+    this.menu.render(ctx, fade, this.age);
 
+    const py = this.menu.bottom + 64;
     if (this.game.input.device === 'touch') {
-      glowText(ctx, 'TAP AN OPTION', W / 2, H / 2 + 150, { size: 14, color: COLORS.white, align: 'center', alpha: fade * 0.8, blur: 0 });
+      glowText(ctx, 'TAP AN OPTION', W / 2, py, { size: 14, color: COLORS.white, align: 'center', alpha: fade * 0.8, blur: 0 });
       return;
     }
     renderPrompts(
@@ -148,7 +94,7 @@ export class PauseState implements GameState {
       ],
       this.game.input,
       W / 2,
-      H / 2 + 150,
+      py,
       'center',
       13,
       fade,

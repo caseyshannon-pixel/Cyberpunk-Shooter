@@ -1,11 +1,11 @@
 import { COLORS, CONFIG } from '../config';
 import { storage } from '../core/storage';
 import type { Game } from '../game';
-import { Action } from '../input/bindings';
-import { renderPrompts } from '../ui/prompts';
+import { Menu } from '../ui/menu';
 import { glowText } from '../ui/text';
 import type { PlayState } from './play';
 import type { GameState } from './state';
+import { TitleState } from './title';
 import { VIEW } from '../core/view';
 
 /** Shown over the frozen arena after the player dies. Saves the high score. */
@@ -14,6 +14,7 @@ export class GameOverState implements GameState {
   private age = 0;
   private readonly best: number;
   private readonly isNewBest: boolean;
+  private readonly menu: Menu;
 
   constructor(
     private readonly game: Game,
@@ -24,6 +25,14 @@ export class GameOverState implements GameState {
     this.isNewBest = score > prev;
     this.best = Math.max(prev, score);
     if (this.isNewBest) storage.set(CONFIG.score.storageKey, String(score));
+    this.menu = new Menu(
+      game,
+      [
+        { label: 'RETRY', run: () => this.retry() },
+        { label: 'MAIN MENU', run: () => game.transition(() => new TitleState(game)) },
+      ],
+      { y: VIEW.height / 2 + 150, spacing: 44 },
+    );
   }
 
   enter(): void {
@@ -32,7 +41,6 @@ export class GameOverState implements GameState {
   }
 
   private retry(): void {
-    this.game.audio.sfx.play('uiSelect');
     this.play.reset();
     this.game.pop();
   }
@@ -40,8 +48,7 @@ export class GameOverState implements GameState {
   update(dt: number): void {
     this.age += dt;
     if (this.age < 0.8) return; // ignore inputs still held from the moment of death
-    const input = this.game.input;
-    if (input.pressed(Action.CONFIRM) || input.pressed(Action.PAUSE) || input.taps.length) this.retry();
+    this.menu.update();
   }
 
   render(ctx: CanvasRenderingContext2D): void {
@@ -57,7 +64,7 @@ export class GameOverState implements GameState {
     ctx.restore();
 
     const glitch = this.age < 0.6 ? (Math.random() - 0.5) * 14 : 0;
-    glowText(ctx, 'FLATLINED', W / 2 + glitch, H / 2 - 130, { size: 64, color: COLORS.white, glow: COLORS.red, blur: 26, align: 'center', alpha: fade });
+    glowText(ctx, 'FLATLINED', W / 2 + glitch, H / 2 - 140, { size: 64, color: COLORS.white, glow: COLORS.red, blur: 26, align: 'center', alpha: fade });
 
     const rows: [string, string][] = [
       ['SCORE', w.score.score.toLocaleString('en-US')],
@@ -66,22 +73,17 @@ export class GameOverState implements GameState {
       ['BEST', this.best.toLocaleString('en-US')],
     ];
     rows.forEach(([label, value], i) => {
-      const y = H / 2 - 50 + i * 34;
+      const y = H / 2 - 60 + i * 34;
       glowText(ctx, label, W / 2 - 20, y, { size: 18, color: '#8c7fb0', align: 'right', blur: 0, alpha: fade });
       glowText(ctx, value, W / 2 + 20, y, { size: 22, color: i === 0 ? COLORS.cyan : COLORS.white, align: 'left', alpha: fade });
     });
 
     if (this.isNewBest) {
       const blink = 0.55 + 0.45 * Math.sin(this.age * 8);
-      glowText(ctx, '★ NEW HIGH SCORE ★', W / 2, H / 2 + 100, { size: 20, color: COLORS.yellow, align: 'center', alpha: fade * blink, blur: 14 });
+      glowText(ctx, '★ NEW HIGH SCORE ★', W / 2, H / 2 + 90, { size: 20, color: COLORS.yellow, align: 'center', alpha: fade * blink, blur: 14 });
     }
 
     if (this.age < 0.8) return;
-    const input = this.game.input;
-    if (input.device === 'touch') {
-      glowText(ctx, 'TAP TO RETRY', W / 2, H / 2 + 160, { size: 16, color: COLORS.white, align: 'center', blur: 0 });
-    } else {
-      renderPrompts(ctx, [{ action: Action.CONFIRM, label: 'RETRY' }], input, W / 2, H / 2 + 160, 'center', 14);
-    }
+    this.menu.render(ctx, Math.min(1, (this.age - 0.8) / 0.2), this.age);
   }
 }

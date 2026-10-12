@@ -14,15 +14,20 @@ export class PlayState implements GameState {
   readonly touchControls = true;
   world!: World;
   private gameOverShown = false;
+  private readonly unsubscribeResize: () => void;
 
   constructor(private readonly game: Game) {
     this.reset();
     // If the screen changes shape before the first wave starts (e.g. the page
     // loaded in portrait and the phone was then rotated), re-fit the arena.
-    game.display.onResize(() => {
+    this.unsubscribeResize = game.display.onResize(() => {
       const w = this.world;
       if (w.waves.wave === 0 && w.score.kills === 0 && game.display.preferredWidth() !== w.viewWidth) this.reset();
     });
+  }
+
+  exit(): void {
+    this.unsubscribeResize();
   }
 
   /** Start a fresh run. The view width is locked here so the arena never changes shape mid-run. */
@@ -90,7 +95,7 @@ export class PlayState implements GameState {
       renderDashRing(ctx, w.player, alpha);
       renderReticle(ctx, w.player, input, alpha, w.time);
     }
-    renderWaveBanner(ctx, w);
+    if (w.player.alive) renderWaveBanner(ctx, w);
     renderHud(ctx, w, input);
     if (w.player.alive) renderTouchHud(ctx, input, w.player);
   }

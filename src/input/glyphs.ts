@@ -111,3 +111,11 @@ export function navigateGlyph(device: Device): string {
   if (device === 'gamepad') return 'D-PAD';
   return `${keyLabel(KEYBOARD_BINDINGS.MENU_UP[0])}${keyLabel(KEYBOARD_BINDINGS.MENU_DOWN[0])}`;
 }
+
+/** Every binding for an action on a device (e.g. ['SPACE', 'SHIFT', 'RMB']), for the Controls screen. */
+export function actionGlyphs(action: Action, device: Device, style: PadStyle = 'xbox'): string[] {
+  if (device === 'gamepad') return GAMEPAD_BINDINGS[action].map((b) => PAD_LABELS[style][b] ?? `B${b}`);
+  const keys = KEYBOARD_BINDINGS[action].map(keyLabel);
+  const mouse = (MOUSE_BINDINGS[action] ?? []).map((b) => MOUSE_LABELS[b] ?? `M${b}`);
+  return [...mouse, ...keys];
+}

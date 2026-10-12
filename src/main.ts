@@ -3,14 +3,14 @@ import { Display } from './core/display';
 import { FixedLoop } from './core/loop';
 import { Game } from './game';
 import { Input } from './input/input';
-import { PlayState } from './states/play';
+import { TitleState } from './states/title';
 
 const canvas = document.getElementById('game') as HTMLCanvasElement;
 const display = new Display(canvas);
 const input = new Input(display);
 const game = new Game(display, input);
 
-game.set(new PlayState(game));
+game.set(new TitleState(game));
 
 const loop = new FixedLoop(
   (dt) => game.update(dt),

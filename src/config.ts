@@ -8,37 +8,37 @@ const TAU = Math.PI * 2;
  */
 const WEAPON_DEFS = {
   pulse: {
-    name: 'PULSE PISTOL', short: 'PULSE', color: '#00f0ff', mode: 'projectile', behavior: 'basic',
+    name: 'PULSE PISTOL', short: 'PULSE', blurb: 'Steady single shots. Infinite ammo.', color: '#00f0ff', mode: 'projectile', behavior: 'basic',
     fireRate: 7, damage: 1, ammo: null,
     projectileSpeed: 900, projectileRadius: 4, count: 1, arc: 0, spread: 0.03, lifetime: 1.2,
   },
   spread: {
-    name: 'SPREAD SHOT', short: 'SPRD', color: '#ffe14d', mode: 'projectile', behavior: 'basic',
+    name: 'SPREAD SHOT', short: 'SPRD', blurb: '5-way fan. Great at close range.', color: '#ffe14d', mode: 'projectile', behavior: 'basic',
     fireRate: 4.5, damage: 1, ammo: 60,
     projectileSpeed: 820, projectileRadius: 4, count: 5, arc: 0.62, spread: 0.04, lifetime: 0.75,
   },
   rail: {
-    name: 'PLASMA RAIL', short: 'RAIL', color: '#b18cff', mode: 'rail',
+    name: 'PLASMA RAIL', short: 'RAIL', blurb: 'Hold to charge; beam pierces everything in line.', color: '#b18cff', mode: 'rail',
     fireRate: 2.6, damage: 8, ammo: 14,
     chargeTime: 0.42, beamWidth: 12,
   },
   homing: {
-    name: 'HOMING SWARM', short: 'SWRM', color: '#7dff4d', mode: 'projectile', behavior: 'homing',
+    name: 'HOMING SWARM', short: 'SWRM', blurb: 'Twin missiles that curve toward targets.', color: '#7dff4d', mode: 'projectile', behavior: 'homing',
     fireRate: 4, damage: 1.5, ammo: 45,
     projectileSpeed: 520, projectileRadius: 4, count: 2, arc: 0.9, spread: 0.12, lifetime: 2.2, turnRate: 7,
   },
   ricochet: {
-    name: 'RICOCHET DISC', short: 'DISC', color: '#ff9a1f', mode: 'projectile', behavior: 'bounce',
+    name: 'RICOCHET DISC', short: 'DISC', blurb: 'Bouncing disc: 3 wall bounces, pierces 2.', color: '#ff9a1f', mode: 'projectile', behavior: 'bounce',
     fireRate: 3.2, damage: 2, ammo: 40,
     projectileSpeed: 640, projectileRadius: 9, count: 1, arc: 0, spread: 0, lifetime: 2.6, bounces: 3, pierce: 2,
   },
   arc: {
-    name: 'ARC LIGHTNING', short: 'ARC', color: '#8fd8ff', mode: 'arc',
+    name: 'ARC LIGHTNING', short: 'ARC', blurb: 'Lightning that chains between enemies.', color: '#8fd8ff', mode: 'arc',
     fireRate: 6, damage: 2, ammo: 50,
     range: 300, cone: 0.6, chains: 4, chainRange: 170, falloff: 0.8,
   },
   nova: {
-    name: 'NOVA BURST', short: 'NOVA', color: '#fff3b0', mode: 'projectile', behavior: 'basic',
+    name: 'NOVA BURST', short: 'NOVA', blurb: '18-shot ring in every direction.', color: '#fff3b0', mode: 'projectile', behavior: 'basic',
     fireRate: 2.2, damage: 1.5, ammo: 22,
     projectileSpeed: 620, projectileRadius: 5, count: 18, arc: TAU, spread: 0, lifetime: 0.9,
   },

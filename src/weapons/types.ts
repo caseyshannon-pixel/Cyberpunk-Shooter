@@ -20,6 +20,8 @@ export interface WeaponDef {
   /** Short label for pickups / HUD slots. */
   readonly short: string;
   readonly color: string;
+  /** One-line description for the Controls screen. */
+  readonly blurb?: string;
   readonly mode: FireMode;
   /** Shots per second. */
   readonly fireRate: number;

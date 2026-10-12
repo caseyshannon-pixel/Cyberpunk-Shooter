@@ -102,6 +102,9 @@ export class Input {
 
   private readonly knownPads = new Map<number, PadInfo>();
   private readonly padButtons: boolean[] = [];
+  private readonly prevPadButtons: boolean[] = [];
+  /** Any key / mouse button / tap / controller button went down this tick. */
+  private anyRaw = false;
   private readonly padMove = vec();
   private readonly padAim = vec();
   private readonly tmp = vec();
@@ -144,8 +147,9 @@ export class Input {
     this.consumed.add(action);
   }
 
+  /** "Press any button": any key, click, tap or controller button this tick. */
   anyPressed(): boolean {
-    if (this.taps.length) return true;
+    if (this.anyRaw || this.taps.length) return true;
     for (const a of ALL_ACTIONS) if (this.pressed(a)) return true;
     return false;
   }
@@ -299,6 +303,9 @@ export class Input {
       if (this.padMove.x > t) this.curr.set(Action.MENU_RIGHT, true);
     }
 
+    this.anyRaw = this.keysLatched.size > 0 || this.mouseLatched.size > 0 || this.padButtons.some((d, i) => d && !this.prevPadButtons[i]);
+    this.prevPadButtons.length = 0;
+    for (let i = 0; i < this.padButtons.length; i++) this.prevPadButtons[i] = this.padButtons[i];
     this.keysLatched.clear();
     this.mouseLatched.clear();
     this.wheelLatched.clear();

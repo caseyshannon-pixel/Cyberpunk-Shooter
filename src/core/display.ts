@@ -46,8 +46,13 @@ export class Display {
     this.resize();
   }
 
-  onResize(fn: () => void): void {
+  /** Listen for size changes; returns a function that removes the listener. */
+  onResize(fn: () => void): () => void {
     this.resizeListeners.push(fn);
+    return () => {
+      const i = this.resizeListeners.indexOf(fn);
+      if (i >= 0) this.resizeListeners.splice(i, 1);
+    };
   }
 
   private watchDpr(): void {
