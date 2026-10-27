@@ -3,29 +3,32 @@ import { isIPhone } from '../core/fullscreen';
 import { VIEW } from '../core/view';
 import type { Game } from '../game';
 import { Action } from '../input/bindings';
-import { settings, type Settings } from '../settings';
+import { GRAPHICS_MODES, settings, type GraphicsMode, type Settings } from '../settings';
 import { renderPrompts } from '../ui/prompts';
 import { font, glowText } from '../ui/text';
 import type { GameState } from './state';
 
 type SliderKey = 'master' | 'music' | 'sfx' | 'shake';
-type ToggleKey = 'hd' | 'crt' | 'rumble' | 'soundInSilentMode';
+type ToggleKey = 'crt' | 'rumble' | 'soundInSilentMode';
 
 type Row =
   | { kind: 'slider'; key: SliderKey; label: string }
   | { kind: 'toggle'; key: ToggleKey; label: string }
+  | { kind: 'graphics'; label: string }
   | { kind: 'back'; label: string };
 
 const ROW_H = 44;
 const SLIDER_W = 240;
 const STEP = 0.1;
 
+const GRAPHICS_LABELS: Record<GraphicsMode, string> = { hd2d: 'HD-2D (TILTED)', '2.5d': '2.5D (TOP-DOWN)', flat: 'FLAT' };
+
 function isAppleTouch(): boolean {
   return isIPhone() || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 }
 
 /**
- * Settings overlay: volumes, screen shake, 2.5D graphics, CRT overlay,
+ * Settings overlay: volumes, screen shake, graphics mode, CRT overlay,
  * rumble and (on iPhone/iPad) whether sound plays with the silent switch on.
  * Changes apply and save immediately.
  */
@@ -44,7 +47,7 @@ export class SettingsState implements GameState {
       { kind: 'slider', key: 'music', label: 'MUSIC' },
       { kind: 'slider', key: 'sfx', label: 'SOUND EFFECTS' },
       { kind: 'slider', key: 'shake', label: 'SCREEN SHAKE' },
-      { kind: 'toggle', key: 'hd', label: '2.5D GRAPHICS' },
+      { kind: 'graphics', label: 'GRAPHICS' },
       { kind: 'toggle', key: 'crt', label: 'CRT SCANLINES' },
       { kind: 'toggle', key: 'rumble', label: 'CONTROLLER RUMBLE' },
       ...(isAppleTouch() ? [{ kind: 'toggle', key: 'soundInSilentMode', label: 'SOUND IN SILENT MODE' } as Row] : []),
@@ -94,12 +97,17 @@ export class SettingsState implements GameState {
     } else if (row.kind === 'toggle') {
       settings.set(row.key, !settings.get()[row.key]);
       this.sfx('uiSelect');
+    } else if (row.kind === 'graphics') {
+      const n = GRAPHICS_MODES.length;
+      const i = GRAPHICS_MODES.indexOf(settings.get().graphics);
+      settings.set('graphics', GRAPHICS_MODES[(i + dir + n) % n]);
+      this.sfx('uiSelect');
     }
   }
 
   private activate(row: Row): void {
     if (row.kind === 'back') this.close();
-    else if (row.kind === 'toggle') this.adjust(row, 1);
+    else if (row.kind === 'toggle' || row.kind === 'graphics') this.adjust(row, 1);
   }
 
   update(dt: number): void {
@@ -204,6 +212,12 @@ export class SettingsState implements GameState {
         ctx.textAlign = 'left';
         ctx.textBaseline = 'middle';
         ctx.fillText(row.key === 'shake' && v === 0 ? 'OFF' : `${Math.round(v * 100)}%`, vx + SLIDER_W + 16, y + 1);
+      } else if (row.kind === 'graphics') {
+        ctx.font = font(15, sel ? 'bold' : 'normal');
+        ctx.fillStyle = sel ? COLORS.cyan : COLORS.white;
+        ctx.textAlign = 'left';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(`◀  ${GRAPHICS_LABELS[s.graphics]}  ▶`, vx, y + 1);
       } else {
         const on = s[row.key as keyof Settings] as boolean;
         ctx.fillStyle = on ? COLORS.cyan : 'rgba(255,255,255,0.12)';

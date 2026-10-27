@@ -6,12 +6,12 @@
  * small buffers does the blurring; only the final blit touches every pixel.
  */
 
-interface Buffer {
+export interface Buffer {
   canvas: HTMLCanvasElement;
   ctx: CanvasRenderingContext2D;
 }
 
-function buffer(): Buffer {
+export function buffer(): Buffer {
   const canvas = document.createElement('canvas');
   const ctx = canvas.getContext('2d');
   if (!ctx) throw new Error('2D context unavailable');
@@ -22,14 +22,14 @@ let levels: Buffer[] | null = null;
 let raw: Buffer | null = null;
 let sum: Buffer | null = null;
 
-function fit(b: Buffer, w: number, h: number): void {
+export function fit(b: Buffer, w: number, h: number): void {
   if (b.canvas.width === w && b.canvas.height === h) return;
   b.canvas.width = w;
   b.canvas.height = h;
 }
 
 /** Copy `src` into `dst`, scaled to fill it. */
-function blit(dst: Buffer, src: HTMLCanvasElement): void {
+export function blit(dst: Buffer, src: HTMLCanvasElement): void {
   const c = dst.ctx;
   c.globalCompositeOperation = 'source-over';
   c.globalAlpha = 1;
@@ -41,13 +41,14 @@ function blit(dst: Buffer, src: HTMLCanvasElement): void {
 
 /**
  * Safety net for weak GPUs: if frames keep running long (below ~40 fps) for a
- * couple of seconds, bloom switches itself off for the rest of the session.
+ * couple of seconds, the full-screen post effects (bloom, and the HD-2D
+ * depth of field) switch themselves off for the rest of the session.
  */
 let slowFrames = 0;
 let disabled = false;
 
-/** False once the frame-pace safety net has switched bloom off. */
-export function bloomAvailable(): boolean {
+/** False once the frame-pace safety net has switched post effects off. */
+export function postFxAvailable(): boolean {
   return !disabled;
 }
 

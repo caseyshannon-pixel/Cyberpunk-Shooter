@@ -1,6 +1,6 @@
 import { COLORS, CONFIG } from '../config';
 import { circleCircle, segmentCircle, type Contact } from '../core/collision';
-import { approach, len, lerp, TAU } from '../core/math';
+import { approach, len, lerp, TAU, type Vec2 } from '../core/math';
 import { SpatialGrid } from '../core/spatialGrid';
 import { createBossState, renderBoss } from '../entities/boss';
 import { Enemy, renderEnemy, type EnemyKind } from '../entities/enemy';
@@ -14,7 +14,9 @@ import type { SfxName } from '../audio';
 import { settings } from '../settings';
 import { renderArena, renderArenaTop, renderBackground } from '../render/background';
 import { applyBloom } from '../render/bloom';
-import { drawLight, drawShadow, hdEnabled, hiddenByStructure, type Eye } from '../render/depth';
+import { drawLight, drawShadow, eyeProjector, graphicsMode, hiddenByStructure, type Projector, type Pt } from '../render/depth';
+import { applyTiltShift } from '../render/dof';
+import { TiltCamera } from '../render/tilt';
 import { updateWeapons } from '../weapons/weaponSystem';
 import { Arena } from './arena';
 import { Effects } from './effects';
@@ -71,8 +73,10 @@ export class World implements ProjectileHost {
   /** Slow motion: seconds left and the time scale while it lasts. */
   slowMo = 0;
   slowMoScale = 1;
-  /** HD 2.5D: the floor point the virtual camera looks down on (drifts with the player). */
-  readonly eye: Eye;
+  /** 2.5D: the floor point the virtual camera looks down on (drifts with the player; HD-2D sways with it). */
+  readonly eye: Pt;
+  /** HD-2D camera (Settings → GRAPHICS). */
+  readonly camera = new TiltCamera();
   private readonly near: Enemy[] = [];
 
   constructor(
@@ -84,6 +88,7 @@ export class World implements ProjectileHost {
     this.grid = new SpatialGrid<Enemy>(b.x, b.y, b.w, b.h, C.spatialCell);
     this.player = new Player(this.arena.centerX, this.arena.centerY + 120);
     this.eye = { x: this.arena.centerX, y: this.arena.centerY };
+    this.camera.setup(this.arena, 0);
   }
 
   get zen(): boolean {
@@ -494,43 +499,16 @@ export class World implements ProjectileHost {
 
   // ---------------------------------------------------------------- render
 
-  render(ctx: CanvasRenderingContext2D, alpha: number): void {
+  /**
+   * Draw the world. `overlay` draws extra world-space markers (dash ring,
+   * controller reticle) on the floor, so they follow any camera.
+   */
+  render(ctx: CanvasRenderingContext2D, alpha: number, overlay?: (ctx: CanvasRenderingContext2D) => void): void {
+    const mode = graphicsMode();
     ctx.save();
-    // Trauma shake: smooth (sum-of-sines noise) rather than random jitter, with a slight roll.
-    const k = this.trauma * this.trauma * settings.get().shake;
-    if (k > 0.001) {
-      const t = this.time * 32;
-      const nx = Math.sin(t * 1.1) * 0.6 + Math.sin(t * 2.3 + 1.7) * 0.4;
-      const ny = Math.sin(t * 1.3 + 4.2) * 0.6 + Math.sin(t * 2.9 + 0.3) * 0.4;
-      const nr = Math.sin(t * 0.9 + 2.4);
-      const cx = this.viewWidth / 2;
-      const cy = VIEW.height / 2;
-      ctx.translate(cx + nx * 22 * k, cy + ny * 22 * k);
-      ctx.rotate(nr * 0.012 * k);
-      ctx.translate(-cx, -cy);
-    }
-    const hd = hdEnabled();
-    renderBackground(ctx, this.time, this.arena);
-    renderArena(ctx, this.arena, this.time, this.eye);
-    if (hd) this.renderFloorLighting(ctx, alpha);
-    this.waves.renderMarkers(ctx, this.time);
-    this.pickups.render(ctx);
-    for (const e of this.enemies) {
-      if (e.boss) renderBoss(ctx, e, alpha);
-      else renderEnemy(ctx, e, alpha);
-    }
-    renderProjectiles(ctx, this.projectiles, alpha, this.time);
-    this.effects.render(ctx);
-    this.particles.render(ctx, alpha);
-    this.player.render(ctx, alpha, this.time);
-    if (hd) {
-      renderArenaTop(ctx, this.arena, this.time, this.eye);
-      // Never lose the ship behind a raised obstacle.
-      const p = this.player;
-      if (p.alive && hiddenByStructure(this.arena, this.eye, p.x, p.y, p.radius)) p.renderXray(ctx, alpha);
-      applyBloom(ctx, CONFIG.depth.bloom);
-    }
-    this.popups.render(ctx);
+    this.applyShake(ctx);
+    if (mode === 'hd2d') this.renderTilted(ctx, alpha, overlay);
+    else this.renderTopDown(ctx, alpha, mode === '2.5d', overlay);
     ctx.restore();
 
     if (this.damageFlash > 0) {
@@ -546,7 +524,88 @@ export class World implements ProjectileHost {
     }
   }
 
-  /** HD 2.5D: coloured light pooled on the floor under everything that glows, then hover shadows. */
+  /** Trauma shake: smooth (sum-of-sines noise) rather than random jitter, with a slight roll. */
+  private applyShake(ctx: CanvasRenderingContext2D): void {
+    const k = this.trauma * this.trauma * settings.get().shake;
+    if (k <= 0.001) return;
+    const t = this.time * 32;
+    const nx = Math.sin(t * 1.1) * 0.6 + Math.sin(t * 2.3 + 1.7) * 0.4;
+    const ny = Math.sin(t * 1.3 + 4.2) * 0.6 + Math.sin(t * 2.9 + 0.3) * 0.4;
+    const nr = Math.sin(t * 0.9 + 2.4);
+    const cx = this.viewWidth / 2;
+    const cy = VIEW.height / 2;
+    ctx.translate(cx + nx * 22 * k, cy + ny * 22 * k);
+    ctx.rotate(nr * 0.012 * k);
+    ctx.translate(-cx, -cy);
+  }
+
+  /**
+   * Everything that lies on (or hovers just above) the floor, in world
+   * coordinates. `walls` also draws the outer walls (top-down modes only).
+   */
+  private renderFloor(ctx: CanvasRenderingContext2D, alpha: number, lit: boolean, walls: Projector | null): void {
+    renderBackground(ctx, this.time, this.arena);
+    if (walls) renderArena(ctx, this.arena, this.time, walls);
+    if (lit) this.renderFloorLighting(ctx, alpha);
+    this.waves.renderMarkers(ctx, this.time);
+    this.pickups.render(ctx);
+    for (const e of this.enemies) {
+      if (e.boss) renderBoss(ctx, e, alpha);
+      else renderEnemy(ctx, e, alpha);
+    }
+    renderProjectiles(ctx, this.projectiles, alpha, this.time);
+    this.effects.render(ctx);
+    this.particles.render(ctx, alpha);
+    this.player.render(ctx, alpha, this.time);
+  }
+
+  /** Flat and 2.5D: the original straight-down view (2.5D adds depth around the eye). */
+  private renderTopDown(ctx: CanvasRenderingContext2D, alpha: number, depth: boolean, overlay?: (ctx: CanvasRenderingContext2D) => void): void {
+    const P = eyeProjector(this.eye);
+    this.renderFloor(ctx, alpha, depth, P);
+    overlay?.(ctx);
+    if (depth) {
+      renderArenaTop(ctx, this.arena, this.time, P);
+      // Never lose the ship behind a raised obstacle.
+      const p = this.player;
+      if (p.alive && hiddenByStructure(this.arena, P, p.x, p.y, p.radius)) p.renderXray(ctx, alpha);
+      applyBloom(ctx, CONFIG.depth.bloom);
+    }
+    this.popups.render(ctx);
+  }
+
+  /** HD-2D: the tilted perspective camera (see render/tilt.ts). */
+  private renderTilted(ctx: CanvasRenderingContext2D, alpha: number, overlay?: (ctx: CanvasRenderingContext2D) => void): void {
+    const cam = this.camera;
+    const T = CONFIG.tilt;
+    cam.setup(this.arena, (this.eye.x - this.arena.centerX) * T.sway);
+    cam.render(ctx, this.arena, this.time, (c) => {
+      this.renderFloor(c, alpha, true, null);
+      overlay?.(c);
+    });
+    const p = this.player;
+    if (p.alive && hiddenByStructure(this.arena, cam, p.x, p.y, p.radius)) {
+      ctx.save();
+      cam.applyLocal(ctx, lerp(p.prevX, p.x, alpha), lerp(p.prevY, p.y, alpha));
+      p.renderXray(ctx, alpha);
+      ctx.restore();
+    }
+    applyTiltShift(ctx, cam.farTop + T.blurTopFade, cam.nearBottom - T.blurBottom);
+    applyBloom(ctx, CONFIG.depth.bloom);
+    this.popups.render(ctx, cam);
+  }
+
+  /** Map a screen point (e.g. the mouse) to the floor, for aiming. Identity unless the camera is tilted. */
+  screenToFloor = (sx: number, sy: number, out: Vec2): void => {
+    if (graphicsMode() === 'hd2d') {
+      this.camera.unproject(sx, sy, out);
+    } else {
+      out.x = sx;
+      out.y = sy;
+    }
+  };
+
+  /** 2.5D/HD-2D: coloured light pooled on the floor under everything that glows, then hover shadows. */
   private renderFloorLighting(ctx: CanvasRenderingContext2D, alpha: number): void {
     const D = CONFIG.depth;
     const p = this.player;

@@ -75,6 +75,12 @@ export class Input {
   /** Mouse position in logical game coordinates. */
   readonly mouse: Vec2 = vec(VIEW.width / 2, VIEW.height / 2);
   mouseInside = false;
+  /**
+   * Maps the pointer from screen to world coordinates for mouse aiming, when
+   * the camera isn't straight top-down (set by the play state). Null = identity.
+   */
+  pointerToWorld: ((sx: number, sy: number, out: Vec2) => void) | null = null;
+  private readonly aimPoint: Vec2 = vec();
   /** Mouse moved since last tick (menus use it for hover selection). */
   mouseMoved = false;
   /** Clicks / taps since the last tick, in logical coordinates (for menus). */
@@ -167,8 +173,15 @@ export class Input {
       out.y = this.aimStick.y / m;
       return true;
     }
-    const dx = this.mouse.x - fromX;
-    const dy = this.mouse.y - fromY;
+    let mx = this.mouse.x;
+    let my = this.mouse.y;
+    if (this.pointerToWorld) {
+      this.pointerToWorld(mx, my, this.aimPoint);
+      mx = this.aimPoint.x;
+      my = this.aimPoint.y;
+    }
+    const dx = mx - fromX;
+    const dy = my - fromY;
     const d = len(dx, dy);
     if (d < 1) return false;
     out.x = dx / d;

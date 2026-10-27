@@ -1,3 +1,5 @@
+import type { Pt } from '../render/depth';
+import type { TiltCamera } from '../render/tilt';
 import { font } from '../ui/text';
 
 interface Popup {
@@ -36,7 +38,10 @@ export class Popups {
     this.items.length = 0;
   }
 
-  render(ctx: CanvasRenderingContext2D): void {
+  private readonly pt: Pt = { x: 0, y: 0 };
+
+  /** With the HD-2D `camera`, each popup is placed over its floor position and scaled by distance. */
+  render(ctx: CanvasRenderingContext2D, camera?: TiltCamera): void {
     if (!this.items.length) return;
     ctx.save();
     ctx.textAlign = 'center';
@@ -44,12 +49,21 @@ export class Popups {
     for (const p of this.items) {
       const t = p.life / p.maxLife;
       const pop = t > 0.85 ? 1 + (t - 0.85) * 3 : 1;
+      let x = p.x;
+      let y = p.y;
+      let size = p.size * pop;
+      if (camera) {
+        camera.project(p.x, p.y, 0, this.pt);
+        x = this.pt.x;
+        y = this.pt.y;
+        size *= camera.scaleAt(p.y);
+      }
       ctx.globalAlpha = Math.min(1, t * 2);
-      ctx.font = font(Math.round(p.size * pop));
+      ctx.font = font(Math.round(size));
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
-      ctx.fillText(p.text, p.x + 1.5, p.y + 1.5);
+      ctx.fillText(p.text, x + 1.5, y + 1.5);
       ctx.fillStyle = p.color;
-      ctx.fillText(p.text, p.x, p.y);
+      ctx.fillText(p.text, x, y);
     }
     ctx.restore();
   }

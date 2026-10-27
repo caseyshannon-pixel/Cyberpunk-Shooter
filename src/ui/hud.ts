@@ -102,49 +102,51 @@ export function renderDashRing(ctx: CanvasRenderingContext2D, player: Player, al
   ctx.restore();
 }
 
-/** Mouse crosshair, or a stick-driven reticle in front of the player. */
-export function renderReticle(ctx: CanvasRenderingContext2D, player: Player, input: Input, alpha: number, time: number): void {
+/** Mouse crosshair, drawn in screen space at the pointer. */
+export function renderCrosshair(ctx: CanvasRenderingContext2D, input: Input, time: number): void {
+  if (input.device !== 'keyboard' || !input.mouseInside) return;
   ctx.save();
   ctx.shadowBlur = 10;
-  if (input.device === 'keyboard') {
-    if (!input.mouseInside) {
-      ctx.restore();
-      return;
-    }
-    const { x, y } = input.mouse;
-    ctx.strokeStyle = COLORS.cyan;
-    ctx.shadowColor = COLORS.cyan;
-    ctx.lineWidth = 2;
-    const r = 9 + Math.sin(time * 6) * 1;
-    ctx.beginPath();
-    ctx.arc(x, y, r, 0, Math.PI * 2);
-    for (let i = 0; i < 4; i++) {
-      const a = (i * Math.PI) / 2;
-      ctx.moveTo(x + Math.cos(a) * (r + 3), y + Math.sin(a) * (r + 3));
-      ctx.lineTo(x + Math.cos(a) * (r + 9), y + Math.sin(a) * (r + 9));
-    }
-    ctx.stroke();
-    ctx.fillStyle = COLORS.magenta;
-    ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
-  } else {
-    const px = lerp(player.prevX, player.x, alpha);
-    const py = lerp(player.prevY, player.y, alpha);
-    const d = CONFIG.input.padReticleDistance;
-    const a = player.aimAngle;
-    const x = px + Math.cos(a) * d;
-    const y = py + Math.sin(a) * d;
-    ctx.globalAlpha = player.aiming ? 0.95 : 0.3;
-    ctx.strokeStyle = COLORS.magenta;
-    ctx.shadowColor = COLORS.magenta;
-    ctx.lineWidth = 2;
-    ctx.translate(x, y);
-    ctx.rotate(a);
-    ctx.beginPath();
-    ctx.moveTo(-6, -8);
-    ctx.lineTo(4, 0);
-    ctx.lineTo(-6, 8);
-    ctx.stroke();
+  const { x, y } = input.mouse;
+  ctx.strokeStyle = COLORS.cyan;
+  ctx.shadowColor = COLORS.cyan;
+  ctx.lineWidth = 2;
+  const r = 9 + Math.sin(time * 6) * 1;
+  ctx.beginPath();
+  ctx.arc(x, y, r, 0, Math.PI * 2);
+  for (let i = 0; i < 4; i++) {
+    const a = (i * Math.PI) / 2;
+    ctx.moveTo(x + Math.cos(a) * (r + 3), y + Math.sin(a) * (r + 3));
+    ctx.lineTo(x + Math.cos(a) * (r + 9), y + Math.sin(a) * (r + 9));
   }
+  ctx.stroke();
+  ctx.fillStyle = COLORS.magenta;
+  ctx.fillRect(x - 1.5, y - 1.5, 3, 3);
+  ctx.restore();
+}
+
+/** Controller/touch aim: a chevron in front of the player, drawn in world space (on the floor). */
+export function renderPadReticle(ctx: CanvasRenderingContext2D, player: Player, input: Input, alpha: number): void {
+  if (input.device === 'keyboard') return;
+  ctx.save();
+  ctx.shadowBlur = 10;
+  const px = lerp(player.prevX, player.x, alpha);
+  const py = lerp(player.prevY, player.y, alpha);
+  const d = CONFIG.input.padReticleDistance;
+  const a = player.aimAngle;
+  const x = px + Math.cos(a) * d;
+  const y = py + Math.sin(a) * d;
+  ctx.globalAlpha = player.aiming ? 0.95 : 0.3;
+  ctx.strokeStyle = COLORS.magenta;
+  ctx.shadowColor = COLORS.magenta;
+  ctx.lineWidth = 2;
+  ctx.translate(x, y);
+  ctx.rotate(a);
+  ctx.beginPath();
+  ctx.moveTo(-6, -8);
+  ctx.lineTo(4, 0);
+  ctx.lineTo(-6, 8);
+  ctx.stroke();
   ctx.restore();
 }
 

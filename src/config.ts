@@ -338,6 +338,31 @@ export const CONFIG = {
     maxLights: 140,
   },
 
+  /**
+   * HD-2D tilted camera (Settings → GRAPHICS → HD-2D). A perspective camera
+   * south of the arena looks down at it; the floor is drawn with a "Mode 7"
+   * strip warp and walls/blocks with true 3D projection.
+   */
+  tilt: {
+    /** Camera pitch below the horizon, in degrees (90 = straight down). */
+    pitch: 56,
+    /** Camera distance from the arena centre; smaller = stronger perspective. */
+    distance: 1500,
+    /** Sideways camera drift with the player (fraction of the 2.5D eye drift). */
+    sway: 0.6,
+    /** Screen margins around the fitted arena (logical px). */
+    marginTop: 70,
+    marginBottom: 10,
+    marginSide: 12,
+    /** Height of each floor strip in the perspective warp (logical px). */
+    strip: 2,
+    /** Opacity of the near (south) wall, which stands between the camera and the floor. */
+    nearWallAlpha: 0.3,
+    /** Tilt-shift blur: how far below the far wall's top it fades out, and how tall the bottom band is. */
+    blurTopFade: 40,
+    blurBottom: 46,
+  },
+
   ui: {
     toastDuration: 2.6,
     /** Y of the first toast (below the boss bar). */

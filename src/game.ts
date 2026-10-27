@@ -4,7 +4,7 @@ import type { Display } from './core/display';
 import { INTERRUPT_EVENT } from './core/fullscreen';
 import { Action } from './input/bindings';
 import type { Input } from './input/input';
-import { bloomAvailable, trackFramePace } from './render/bloom';
+import { postFxAvailable, trackFramePace } from './render/bloom';
 import { renderCrt } from './render/crt';
 import { settings } from './settings';
 import type { GameState } from './states/state';
@@ -155,7 +155,7 @@ export class Game {
   private renderDebug(ctx: CanvasRenderingContext2D): void {
     const i = this.input;
     const lines = [
-      `fps ${this.fps.toFixed(0)}  dpr ${this.display.dpr}  scale ${this.display.scale.toFixed(2)}  bloom ${bloomAvailable() ? 'on' : 'auto-off'}`,
+      `fps ${this.fps.toFixed(0)}  dpr ${this.display.dpr}  scale ${this.display.scale.toFixed(2)}  fx ${postFxAvailable() ? 'on' : 'auto-off'}`,
       `device ${i.device}`,
       `pad ${i.pad ? `#${i.pad.index} ${i.pad.style} ${i.pad.standard ? 'standard' : 'NON-standard'}` : 'none'}`,
       i.pad ? `id ${i.pad.id.slice(0, 48)}` : '',

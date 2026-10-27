@@ -8,7 +8,9 @@ import { actionGlyph } from '../input/glyphs';
 import { Action } from '../input/bindings';
 import { renderArena, renderArenaTop, renderBackground } from '../render/background';
 import { applyBloom } from '../render/bloom';
-import { drawShadow, hdEnabled } from '../render/depth';
+import { drawShadow, eyeProjector, graphicsMode, type Projector } from '../render/depth';
+import { applyTiltShift } from '../render/dof';
+import { TiltCamera } from '../render/tilt';
 import { Menu } from '../ui/menu';
 import { font, glowText } from '../ui/text';
 import { Arena } from '../world/arena';
@@ -27,6 +29,7 @@ export class TitleState implements GameState {
   readonly overlay = false;
   private arena: Arena;
   private readonly particles = new Particles();
+  private readonly camera = new TiltCamera();
   private readonly attract: Enemy[] = [];
   private time = 0;
   private phase: 'press' | 'menu' = 'press';
@@ -116,23 +119,32 @@ export class TitleState implements GameState {
   render(ctx: CanvasRenderingContext2D, alpha: number): void {
     const W = VIEW.width;
     const H = VIEW.height;
-    // A slow camera drift so the 2.5D walls sway in parallax behind the logo.
+    // A slow camera drift so the 3D walls sway in parallax behind the logo.
     const b = this.arena.bounds;
-    const eye = { x: b.x + b.w / 2 + Math.sin(this.time * 0.31) * b.w * 0.18, y: b.y + b.h / 2 + Math.cos(this.time * 0.23) * b.h * 0.15 };
-    const hd = hdEnabled();
-    renderBackground(ctx, this.time, this.arena);
-    renderArena(ctx, this.arena, this.time, eye);
-
-    ctx.save();
-    if (hd) {
-      for (const e of this.attract) drawShadow(ctx, e.x, e.y, e.radius, CONFIG.depth.hover[e.kind], 0.6);
+    const sway = Math.sin(this.time * 0.31);
+    const mode = graphicsMode();
+    const drawFloor = (c: CanvasRenderingContext2D, walls: Projector | null) => {
+      renderBackground(c, this.time, this.arena);
+      if (walls) renderArena(c, this.arena, this.time, walls);
+      c.save();
+      if (mode !== 'flat') {
+        for (const e of this.attract) drawShadow(c, e.x, e.y, e.radius, CONFIG.depth.hover[e.kind], 0.6);
+      }
+      c.globalAlpha = 0.45;
+      for (const e of this.attract) renderEnemy(c, e, alpha);
+      c.restore();
+      this.particles.render(c, alpha);
+    };
+    if (mode === 'hd2d') {
+      this.camera.setup(this.arena, sway * b.w * 0.08);
+      this.camera.render(ctx, this.arena, this.time, (c) => drawFloor(c, null));
+      applyTiltShift(ctx, this.camera.farTop + CONFIG.tilt.blurTopFade, this.camera.nearBottom - CONFIG.tilt.blurBottom);
+    } else {
+      const P = eyeProjector({ x: b.x + b.w / 2 + sway * b.w * 0.18, y: b.y + b.h / 2 + Math.cos(this.time * 0.23) * b.h * 0.15 });
+      drawFloor(ctx, P);
+      renderArenaTop(ctx, this.arena, this.time, P);
     }
-    ctx.globalAlpha = 0.45;
-    for (const e of this.attract) renderEnemy(ctx, e, alpha);
-    ctx.restore();
-    this.particles.render(ctx, alpha);
-    renderArenaTop(ctx, this.arena, this.time, eye);
-    if (hd) applyBloom(ctx, CONFIG.depth.bloom);
+    if (mode !== 'flat') applyBloom(ctx, CONFIG.depth.bloom);
 
     // Dim the middle so the logo and menu read clearly.
     ctx.save();

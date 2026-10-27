@@ -159,19 +159,28 @@ Pickups pulse on the ground, drift toward you when you're close, and **flash bef
 
 ### Settings (Title or Pause → Settings)
 
-Master / music / sound-effects volume · screen-shake strength · 2.5D graphics · CRT scanline overlay · controller rumble · (iPhone/iPad) sound in silent mode. Changes apply instantly and are saved.
+Master / music / sound-effects volume · screen-shake strength · graphics mode (HD-2D / 2.5D / flat) · CRT scanline overlay · controller rumble · (iPhone/iPad) sound in silent mode. Changes apply instantly and are saved.
 
-### 2.5D graphics (on by default)
+### Graphics modes (Settings → GRAPHICS)
 
-The camera stays straight top-down, so aiming and hit boxes are exactly as before, but the arena gets real depth:
+Aiming, hit boxes and controls are identical in every mode. Only the camera and lighting change.
 
-- Pillars, crates and the outer walls are **extruded neon blocks**. They lean away from a virtual camera above the arena and show their lit side faces. The camera point drifts gently with you, so the blocks shift in **parallax** as you move.
-- Blocks cast **soft shadows** on the floor. Ships, enemies and pickups **hover over their own shadows**.
-- Everything that glows **lights the floor** beneath it: your ship, enemies, every bullet and muzzle flashes.
-- A **bloom** pass makes the neon bleed light.
-- Raised blocks can hide what's behind them, but your ship shows through as an outline, so you never lose it.
+- **HD-2D (tilted)**, the default. A perspective camera south of the arena looks down at it, Octopath-style:
+  - The arena recedes into the distance, under a synthwave sun and a city skyline that slides in parallax as the camera drifts with you.
+  - Walls and blocks stand up in true 3D. The near wall is see-through glass so it never hides the action.
+  - Tilt-shift depth of field softens the skyline and the near edge. Bloom, floor lighting and hover shadows are on.
+  - Mouse aim targets the floor point under the cursor.
+- **2.5D (top-down)**. The straight-down camera, with depth:
+  - Pillars, crates and walls are **extruded neon blocks** that lean away from a virtual camera. That camera drifts with you, so the blocks shift in **parallax**.
+  - Blocks cast **soft shadows**. Ships, enemies and pickups **hover over their own shadows**.
+  - Everything that glows **lights the floor** under it, and a **bloom** pass makes the neon bleed light.
+- **Flat**. The original look.
 
-Turn it off in Settings for the original flat look. If a device can't hold about 40 fps, bloom switches itself off for that session; the debug overlay shows `bloom auto-off`. Tune heights, camera, parallax and bloom in `CONFIG.depth`.
+In both depth modes, a raised block can hide what's behind it, but your ship always shows through as an outline. If a device can't hold about 40 fps, bloom and depth of field switch themselves off for that session; the debug overlay shows `fx auto-off`.
+
+Tuning lives in `src/config.ts`:
+- `CONFIG.tilt`: HD-2D camera pitch, distance, sway and margins.
+- `CONFIG.depth`: block heights, shadows and bloom.
 
 ---
 
@@ -265,8 +274,9 @@ src/
   weapons/           weapon types, arsenal (inventory/ammo), firing, per-tick weapon system
   world/             World (the simulation), arena, waves/spawner, score/combo, pickups,
                      effects (beams/bolts), floating popups, obstacle steering
-  render/            cached background/grid/walls, 2.5D depth (extruded walls, shadows,
-                     floor lights), bloom, CRT overlay, sprite cache
+  render/            cached background/grid/walls, depth (extruded walls, shadows, floor
+                     lights), HD-2D tilted camera + skyline, bloom, depth of field, CRT,
+                     sprite cache
   audio/             Web Audio engine, synthesized SFX, procedural synthwave music
   states/            title, play (Arcade or Zen), pause, settings, controls, game over / session summary
   ui/                HUD, touch HUD, menus, button prompts, text, toasts
@@ -276,4 +286,4 @@ src/
 - **Fixed timestep:** the simulation always advances at 60 updates/s; rendering runs at the display's refresh rate and interpolates between updates.
 - **Input abstraction:** game code asks about *actions* (`MOVE`, `AIM`, `FIRE`, `DASH`, …) — never raw keys or buttons.
 - **Performance:** bullets and particles are pooled; collisions use circle tests on a spatial grid (with swept tests so fast bullets can't tunnel); static layers and glow sprites are cached offscreen; the backing canvas is capped at 2× DPI.
-- **Dev tools:** press **`** / **F3** for the debug overlay (FPS, bloom state, device, raw stick values). In dev builds, `__game` is available in the browser console, e.g. `__game.stack[0].world.waves.wave = 4` jumps to the boss when the current wave ends.
+- **Dev tools:** press **`** / **F3** for the debug overlay (FPS, post-effects state, device, raw stick values). In dev builds, `__game` is available in the browser console, e.g. `__game.stack[0].world.waves.wave = 4` jumps to the boss when the current wave ends.

@@ -2,7 +2,7 @@ import { COLORS, CONFIG } from '../config';
 import type { Arena } from '../world/arena';
 import { VIEW } from '../core/view';
 import { currentScale, makeLayer, type Layer } from './cache';
-import { hdEnabled, renderGroundShading, renderOuterWalls, renderStructures, type Eye } from './depth';
+import { hdEnabled, renderGroundShading, renderOuterWalls, renderStructures, type Projector } from './depth';
 
 const A = CONFIG.arena;
 const H = CONFIG.view.height;
@@ -86,16 +86,16 @@ function buildGrid(scale: number, arena: Arena): Layer {
 let walls: { layer: Layer; arena: Arena; width: number } | null = null;
 
 /**
- * Walls and obstacles, drawn under the entities. In HD 2.5D mode that's only
+ * Walls and obstacles, drawn under the entities. In 2.5D mode that's only
  * the outer walls (they lean outward, away from the play area); the raised
  * obstacles come later via `renderArenaTop`. Otherwise everything is flat:
  * walls and obstacles never change, and canvas shadowBlur is expensive
  * (especially in Safari on iPhone/iPad), so they're drawn once into a cached
  * layer and blitted every frame with a slow alpha "breathing" pulse.
  */
-export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: number, eye: Eye): void {
+export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: number, camera: Projector): void {
   if (hdEnabled()) {
-    renderOuterWalls(ctx, arena, eye, time);
+    renderOuterWalls(ctx, arena, camera, time);
     return;
   }
   const scale = currentScale(ctx);
@@ -111,9 +111,9 @@ export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: n
   ctx.restore();
 }
 
-/** HD 2.5D only: the extruded obstacles, drawn over the entities. */
-export function renderArenaTop(ctx: CanvasRenderingContext2D, arena: Arena, time: number, eye: Eye): void {
-  if (hdEnabled()) renderStructures(ctx, arena, eye, time);
+/** 2.5D only: the extruded obstacles, drawn over the entities. (HD-2D draws its own, see tilt.ts.) */
+export function renderArenaTop(ctx: CanvasRenderingContext2D, arena: Arena, time: number, camera: Projector): void {
+  if (hdEnabled()) renderStructures(ctx, arena, camera, time);
 }
 
 function drawArena(ctx: CanvasRenderingContext2D, arena: Arena, scale: number): void {

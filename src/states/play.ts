@@ -1,7 +1,7 @@
 import { CONFIG } from '../config';
 import type { Game } from '../game';
 import { Action } from '../input/bindings';
-import { renderDashRing, renderHud, renderReticle, renderWaveBanner } from '../ui/hud';
+import { renderCrosshair, renderDashRing, renderHud, renderPadReticle, renderWaveBanner } from '../ui/hud';
 import { renderTouchHud } from '../ui/touchHud';
 import { World, type GameMode } from '../world/world';
 import { GameOverState } from './gameover';
@@ -32,6 +32,7 @@ export class PlayState implements GameState {
 
   exit(): void {
     this.unsubscribeResize();
+    this.game.input.pointerToWorld = null;
   }
 
   /** Start a fresh run. The view width is locked here so the arena never changes shape mid-run. */
@@ -48,6 +49,8 @@ export class PlayState implements GameState {
       },
       this.mode,
     );
+    // Mouse aim targets the floor point under the pointer, whatever the camera.
+    this.game.input.pointerToWorld = this.world.screenToFloor;
     this.gameOverShown = false;
     // Zen keeps the soundtrack calm: pads and bass, no drums.
     audio.music.setIntensity(zen ? 0 : 1);
@@ -106,11 +109,18 @@ export class PlayState implements GameState {
   render(ctx: CanvasRenderingContext2D, alpha: number): void {
     const w = this.world;
     const input = this.game.input;
-    w.render(ctx, alpha);
-    if (w.player.alive) {
-      renderDashRing(ctx, w.player, alpha);
-      renderReticle(ctx, w.player, input, alpha, w.time);
-    }
+    const p = w.player;
+    w.render(
+      ctx,
+      alpha,
+      p.alive
+        ? (c) => {
+            renderDashRing(c, p, alpha);
+            renderPadReticle(c, p, input, alpha);
+          }
+        : undefined,
+    );
+    if (p.alive) renderCrosshair(ctx, input, w.time);
     if (w.player.alive) renderWaveBanner(ctx, w);
     renderHud(ctx, w, input);
     if (w.player.alive) renderTouchHud(ctx, input, w.player);

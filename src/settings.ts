@@ -1,5 +1,9 @@
 import { storage } from './core/storage';
 
+/** flat = original top-down; 2.5d = top-down with depth; hd2d = tilted perspective camera. */
+export const GRAPHICS_MODES = ['hd2d', '2.5d', 'flat'] as const;
+export type GraphicsMode = (typeof GRAPHICS_MODES)[number];
+
 /** Player-adjustable options, persisted to localStorage. */
 export interface Settings {
   /** 0..1 */
@@ -9,8 +13,7 @@ export interface Settings {
   /** Screen-shake strength, 0 (off) .. 1 (full). */
   shake: number;
   crt: boolean;
-  /** HD 2.5D graphics: extruded walls, shadows, floor lighting and bloom. */
-  hd: boolean;
+  graphics: GraphicsMode;
   rumble: boolean;
   /** iPhone/iPad: keep playing sound when the ring/silent switch is set to silent. */
   soundInSilentMode: boolean;
@@ -24,7 +27,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   sfx: 0.8,
   shake: 1,
   crt: true,
-  hd: true,
+  graphics: 'hd2d',
   rumble: true,
   soundInSilentMode: true,
 };
@@ -45,6 +48,8 @@ class SettingsStore {
       for (const k of Object.keys(DEFAULT_SETTINGS) as (keyof Settings)[]) {
         if (typeof parsed[k] === typeof DEFAULT_SETTINGS[k]) (this.value as unknown as Record<string, unknown>)[k] = parsed[k];
       }
+      // Strings must also be one of the allowed values.
+      if (!GRAPHICS_MODES.includes(this.value.graphics)) this.value.graphics = DEFAULT_SETTINGS.graphics;
     } catch {
       /* corrupt — keep defaults */
     }
