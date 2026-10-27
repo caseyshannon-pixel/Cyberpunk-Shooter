@@ -9,6 +9,8 @@ export interface Settings {
   /** Screen-shake strength, 0 (off) .. 1 (full). */
   shake: number;
   crt: boolean;
+  /** HD 2.5D graphics: extruded walls, shadows, floor lighting and bloom. */
+  hd: boolean;
   rumble: boolean;
   /** iPhone/iPad: keep playing sound when the ring/silent switch is set to silent. */
   soundInSilentMode: boolean;
@@ -22,6 +24,7 @@ export const DEFAULT_SETTINGS: Readonly<Settings> = {
   sfx: 0.8,
   shake: 1,
   crt: true,
+  hd: true,
   rumble: true,
   soundInSilentMode: true,
 };

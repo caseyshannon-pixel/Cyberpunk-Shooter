@@ -6,7 +6,9 @@ import { Particles } from '../entities/particles';
 import type { Game } from '../game';
 import { actionGlyph } from '../input/glyphs';
 import { Action } from '../input/bindings';
-import { renderArena, renderBackground } from '../render/background';
+import { renderArena, renderArenaTop, renderBackground } from '../render/background';
+import { applyBloom } from '../render/bloom';
+import { drawShadow, hdEnabled } from '../render/depth';
 import { Menu } from '../ui/menu';
 import { font, glowText } from '../ui/text';
 import { Arena } from '../world/arena';
@@ -114,14 +116,23 @@ export class TitleState implements GameState {
   render(ctx: CanvasRenderingContext2D, alpha: number): void {
     const W = VIEW.width;
     const H = VIEW.height;
+    // A slow camera drift so the 2.5D walls sway in parallax behind the logo.
+    const b = this.arena.bounds;
+    const eye = { x: b.x + b.w / 2 + Math.sin(this.time * 0.31) * b.w * 0.18, y: b.y + b.h / 2 + Math.cos(this.time * 0.23) * b.h * 0.15 };
+    const hd = hdEnabled();
     renderBackground(ctx, this.time, this.arena);
-    renderArena(ctx, this.arena, this.time);
+    renderArena(ctx, this.arena, this.time, eye);
 
     ctx.save();
+    if (hd) {
+      for (const e of this.attract) drawShadow(ctx, e.x, e.y, e.radius, CONFIG.depth.hover[e.kind], 0.6);
+    }
     ctx.globalAlpha = 0.45;
     for (const e of this.attract) renderEnemy(ctx, e, alpha);
     ctx.restore();
     this.particles.render(ctx, alpha);
+    renderArenaTop(ctx, this.arena, this.time, eye);
+    if (hd) applyBloom(ctx, CONFIG.depth.bloom);
 
     // Dim the middle so the logo and menu read clearly.
     ctx.save();

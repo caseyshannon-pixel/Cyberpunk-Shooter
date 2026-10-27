@@ -9,7 +9,7 @@ import { font, glowText } from '../ui/text';
 import type { GameState } from './state';
 
 type SliderKey = 'master' | 'music' | 'sfx' | 'shake';
-type ToggleKey = 'crt' | 'rumble' | 'soundInSilentMode';
+type ToggleKey = 'hd' | 'crt' | 'rumble' | 'soundInSilentMode';
 
 type Row =
   | { kind: 'slider'; key: SliderKey; label: string }
@@ -25,9 +25,9 @@ function isAppleTouch(): boolean {
 }
 
 /**
- * Settings overlay: volumes, screen shake, CRT overlay, rumble and (on
- * iPhone/iPad) whether sound plays with the silent switch on. Changes apply
- * and save immediately.
+ * Settings overlay: volumes, screen shake, 2.5D graphics, CRT overlay,
+ * rumble and (on iPhone/iPad) whether sound plays with the silent switch on.
+ * Changes apply and save immediately.
  */
 export class SettingsState implements GameState {
   readonly overlay = true;
@@ -44,6 +44,7 @@ export class SettingsState implements GameState {
       { kind: 'slider', key: 'music', label: 'MUSIC' },
       { kind: 'slider', key: 'sfx', label: 'SOUND EFFECTS' },
       { kind: 'slider', key: 'shake', label: 'SCREEN SHAKE' },
+      { kind: 'toggle', key: 'hd', label: '2.5D GRAPHICS' },
       { kind: 'toggle', key: 'crt', label: 'CRT SCANLINES' },
       { kind: 'toggle', key: 'rumble', label: 'CONTROLLER RUMBLE' },
       ...(isAppleTouch() ? [{ kind: 'toggle', key: 'soundInSilentMode', label: 'SOUND IN SILENT MODE' } as Row] : []),

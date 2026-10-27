@@ -224,6 +224,18 @@ export class Player {
       ctx.restore();
     }
   }
+
+  /** HD 2.5D: a faint outline drawn over the obstacle that's hiding the ship. */
+  renderXray(ctx: CanvasRenderingContext2D, alpha: number): void {
+    const x = lerp(this.prevX, this.x, alpha);
+    const y = lerp(this.prevY, this.y, alpha);
+    const angle = lerpAngle(this.prevAimAngle, this.aimAngle, alpha);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    ctx.globalAlpha = 0.5;
+    drawShip(ctx, x, y, angle, COLORS.cyan, this.radius);
+    ctx.restore();
+  }
 }
 
 function drawShip(ctx: CanvasRenderingContext2D, x: number, y: number, angle: number, color: string, r: number): void {

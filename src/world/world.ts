@@ -1,17 +1,20 @@
 import { COLORS, CONFIG } from '../config';
 import { circleCircle, segmentCircle, type Contact } from '../core/collision';
-import { approach, len, TAU } from '../core/math';
+import { approach, len, lerp, TAU } from '../core/math';
 import { SpatialGrid } from '../core/spatialGrid';
 import { createBossState, renderBoss } from '../entities/boss';
 import { Enemy, renderEnemy, type EnemyKind } from '../entities/enemy';
 import { ENEMY_AI } from '../entities/enemyAI';
 import { Particles } from '../entities/particles';
+import { pickupColor } from '../entities/pickup';
 import { Player } from '../entities/player';
 import { Projectiles, renderProjectiles, type HomingTarget, type Projectile, type ProjectileHost } from '../entities/projectile';
 import type { Input } from '../input/input';
 import type { SfxName } from '../audio';
 import { settings } from '../settings';
-import { renderArena, renderBackground } from '../render/background';
+import { renderArena, renderArenaTop, renderBackground } from '../render/background';
+import { applyBloom } from '../render/bloom';
+import { drawLight, drawShadow, hdEnabled, hiddenByStructure, type Eye } from '../render/depth';
 import { updateWeapons } from '../weapons/weaponSystem';
 import { Arena } from './arena';
 import { Effects } from './effects';
@@ -68,6 +71,8 @@ export class World implements ProjectileHost {
   /** Slow motion: seconds left and the time scale while it lasts. */
   slowMo = 0;
   slowMoScale = 1;
+  /** HD 2.5D: the floor point the virtual camera looks down on (drifts with the player). */
+  readonly eye: Eye;
   private readonly near: Enemy[] = [];
 
   constructor(
@@ -78,6 +83,7 @@ export class World implements ProjectileHost {
     const b = this.arena.bounds;
     this.grid = new SpatialGrid<Enemy>(b.x, b.y, b.w, b.h, C.spatialCell);
     this.player = new Player(this.arena.centerX, this.arena.centerY + 120);
+    this.eye = { x: this.arena.centerX, y: this.arena.centerY };
   }
 
   get zen(): boolean {
@@ -101,6 +107,7 @@ export class World implements ProjectileHost {
     } else {
       this.deathTime += dt;
     }
+    this.updateEye(dt);
 
     this.waves.update(dt, this);
     this.updateEnemies(dt);
@@ -116,6 +123,15 @@ export class World implements ProjectileHost {
     this.popups.update(dt);
     this.damageFlash = Math.max(0, this.damageFlash - dt);
     this.trauma = Math.max(0, this.trauma - dt * 1.6);
+  }
+
+  /** Ease the 2.5D eye toward a point between the arena centre and the player (parallax). */
+  private updateEye(dt: number): void {
+    const D = CONFIG.depth;
+    const a = this.arena;
+    const k = 1 - Math.exp(-D.parallaxEase * dt);
+    this.eye.x += (a.centerX + (this.player.x - a.centerX) * D.parallax - this.eye.x) * k;
+    this.eye.y += (a.centerY + (this.player.y - a.centerY) * D.parallax - this.eye.y) * k;
   }
 
   private updateEnemies(dt: number): void {
@@ -493,8 +509,10 @@ export class World implements ProjectileHost {
       ctx.rotate(nr * 0.012 * k);
       ctx.translate(-cx, -cy);
     }
+    const hd = hdEnabled();
     renderBackground(ctx, this.time, this.arena);
-    renderArena(ctx, this.arena, this.time);
+    renderArena(ctx, this.arena, this.time, this.eye);
+    if (hd) this.renderFloorLighting(ctx, alpha);
     this.waves.renderMarkers(ctx, this.time);
     this.pickups.render(ctx);
     for (const e of this.enemies) {
@@ -505,6 +523,13 @@ export class World implements ProjectileHost {
     this.effects.render(ctx);
     this.particles.render(ctx, alpha);
     this.player.render(ctx, alpha, this.time);
+    if (hd) {
+      renderArenaTop(ctx, this.arena, this.time, this.eye);
+      // Never lose the ship behind a raised obstacle.
+      const p = this.player;
+      if (p.alive && hiddenByStructure(this.arena, this.eye, p.x, p.y, p.radius)) p.renderXray(ctx, alpha);
+      applyBloom(ctx, CONFIG.depth.bloom);
+    }
     this.popups.render(ctx);
     ctx.restore();
 
@@ -519,5 +544,46 @@ export class World implements ProjectileHost {
       ctx.fillRect(0, 0, W, H);
       ctx.restore();
     }
+  }
+
+  /** HD 2.5D: coloured light pooled on the floor under everything that glows, then hover shadows. */
+  private renderFloorLighting(ctx: CanvasRenderingContext2D, alpha: number): void {
+    const D = CONFIG.depth;
+    const p = this.player;
+    const px = lerp(p.prevX, p.x, alpha);
+    const py = lerp(p.prevY, p.y, alpha);
+    ctx.save();
+    ctx.globalCompositeOperation = 'lighter';
+    for (const it of this.pickups.items) drawLight(ctx, it.x, it.y, 48, pickupColor(it.kind), 0.22);
+    for (const e of this.enemies) {
+      drawLight(ctx, lerp(e.prevX, e.x, alpha), lerp(e.prevY, e.y, alpha), e.radius * 3.4, e.def.color, e.boss ? 0.3 : 0.18);
+    }
+    const pool = this.projectiles.pool;
+    const n = Math.min(pool.count, D.maxLights);
+    for (let i = 0; i < n; i++) {
+      const b = pool.items[i];
+      drawLight(ctx, lerp(b.prevX, b.x, alpha), lerp(b.prevY, b.y, alpha), b.team === 'enemy' ? 34 : 26, b.color, 0.3);
+    }
+    if (p.alive) {
+      drawLight(ctx, px, py, 120, p.overclock > 0 ? COLORS.yellow : COLORS.cyan, 0.2);
+      if (p.sinceShot < 0.06) {
+        const mx = px + Math.cos(p.aimAngle) * CONFIG.player.muzzleOffset;
+        const my = py + Math.sin(p.aimAngle) * CONFIG.player.muzzleOffset;
+        drawLight(ctx, mx, my, 90, p.arsenal.def.color, 0.4 * (1 - p.sinceShot / 0.06));
+      }
+    }
+    ctx.restore();
+
+    ctx.save();
+    const H = D.hover;
+    for (const it of this.pickups.items) {
+      if (it.visible) drawShadow(ctx, it.x, it.y, it.radius, H.pickup + Math.sin(it.age * 3 + it.seed) * 3);
+    }
+    for (const e of this.enemies) {
+      const h = H[e.kind] * (1 + 0.1 * Math.sin(e.age * 3 + e.seed));
+      drawShadow(ctx, lerp(e.prevX, e.x, alpha), lerp(e.prevY, e.y, alpha), e.radius, h);
+    }
+    if (p.alive) drawShadow(ctx, px, py, p.radius, H.player);
+    ctx.restore();
   }
 }

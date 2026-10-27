@@ -309,6 +309,35 @@ export const CONFIG = {
     poolSize: 512,
   },
 
+  /**
+   * HD 2.5D rendering (Settings → 2.5D GRAPHICS). The camera stays straight
+   * top-down; walls and obstacles are extruded toward a virtual camera above
+   * the "eye" point, entities hover over soft shadows and light the floor.
+   * Heights are in logical pixels.
+   */
+  depth: {
+    /** Virtual camera height above the floor; lower = stronger perspective lean. */
+    cameraHeight: 850,
+    /** How far the eye follows the player from the arena centre (0 = fixed). */
+    parallax: 0.22,
+    /** Eye smoothing rate (1/s). */
+    parallaxEase: 3,
+    wallHeight: 34,
+    /** Thickness of the outer wall's top cap. */
+    wallThickness: 12,
+    pillarHeight: 72,
+    crateHeight: 40,
+    /** Shadow offset per unit of height (light from the upper left). */
+    shadowX: 0.35,
+    shadowY: 0.7,
+    /** Hover heights, used for entity shadows. */
+    hover: { player: 16, drone: 22, gunner: 12, splitter: 14, splitling: 10, bruiser: 7, boss: 28, pickup: 12 },
+    /** Overall bloom strength (0 = off). */
+    bloom: 0.9,
+    /** Cap on per-projectile floor lights each frame. */
+    maxLights: 140,
+  },
+
   ui: {
     toastDuration: 2.6,
     /** Y of the first toast (below the boss bar). */

@@ -2,6 +2,7 @@ import { COLORS, CONFIG } from '../config';
 import type { Arena } from '../world/arena';
 import { VIEW } from '../core/view';
 import { currentScale, makeLayer, type Layer } from './cache';
+import { hdEnabled, renderGroundShading, renderOuterWalls, renderStructures, type Eye } from './depth';
 
 const A = CONFIG.arena;
 const H = CONFIG.view.height;
@@ -34,6 +35,8 @@ export function renderBackground(ctx: CanvasRenderingContext2D, time: number, ar
   // Source rect starts one period in, minus the offset, so lines appear to move down-right.
   const sx = (GRID_PERIOD - off) * s;
   ctx.drawImage(grid.layer.canvas, sx, sx, b.w * s, b.h * s, b.x, b.y, b.w, b.h);
+
+  if (hdEnabled()) renderGroundShading(ctx, arena, VIEW.width, H);
 }
 
 function buildFloor(scale: number, arena: Arena): Layer {
@@ -83,11 +86,18 @@ function buildGrid(scale: number, arena: Arena): Layer {
 let walls: { layer: Layer; arena: Arena; width: number } | null = null;
 
 /**
- * Walls and obstacles never change, and canvas shadowBlur is expensive
+ * Walls and obstacles, drawn under the entities. In HD 2.5D mode that's only
+ * the outer walls (they lean outward, away from the play area); the raised
+ * obstacles come later via `renderArenaTop`. Otherwise everything is flat:
+ * walls and obstacles never change, and canvas shadowBlur is expensive
  * (especially in Safari on iPhone/iPad), so they're drawn once into a cached
  * layer and blitted every frame with a slow alpha "breathing" pulse.
  */
-export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: number): void {
+export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: number, eye: Eye): void {
+  if (hdEnabled()) {
+    renderOuterWalls(ctx, arena, eye, time);
+    return;
+  }
   const scale = currentScale(ctx);
   const W = VIEW.width;
   if (!walls || walls.arena !== arena || walls.layer.scale !== scale || walls.width !== W) {
@@ -99,6 +109,11 @@ export function renderArena(ctx: CanvasRenderingContext2D, arena: Arena, time: n
   ctx.globalAlpha = 0.82 + Math.sin(time * 2) * 0.18;
   ctx.drawImage(walls.layer.canvas, 0, 0, W, H);
   ctx.restore();
+}
+
+/** HD 2.5D only: the extruded obstacles, drawn over the entities. */
+export function renderArenaTop(ctx: CanvasRenderingContext2D, arena: Arena, time: number, eye: Eye): void {
+  if (hdEnabled()) renderStructures(ctx, arena, eye, time);
 }
 
 function drawArena(ctx: CanvasRenderingContext2D, arena: Arena, scale: number): void {

@@ -159,7 +159,19 @@ Pickups pulse on the ground, drift toward you when you're close, and **flash bef
 
 ### Settings (Title or Pause → Settings)
 
-Master / music / sound-effects volume · screen-shake strength · CRT scanline overlay · controller rumble · (iPhone/iPad) sound in silent mode. Changes apply instantly and are saved.
+Master / music / sound-effects volume · screen-shake strength · 2.5D graphics · CRT scanline overlay · controller rumble · (iPhone/iPad) sound in silent mode. Changes apply instantly and are saved.
+
+### 2.5D graphics (on by default)
+
+The camera stays straight top-down, so aiming and hit boxes are exactly as before, but the arena gets real depth:
+
+- Pillars, crates and the outer walls are **extruded neon blocks**. They lean away from a virtual camera above the arena and show their lit side faces. The camera point drifts gently with you, so the blocks shift in **parallax** as you move.
+- Blocks cast **soft shadows** on the floor. Ships, enemies and pickups **hover over their own shadows**.
+- Everything that glows **lights the floor** beneath it: your ship, enemies, every bullet and muzzle flashes.
+- A **bloom** pass makes the neon bleed light.
+- Raised blocks can hide what's behind them, but your ship shows through as an outline, so you never lose it.
+
+Turn it off in Settings for the original flat look. If a device can't hold about 40 fps, bloom switches itself off for that session; the debug overlay shows `bloom auto-off`. Tune heights, camera, parallax and bloom in `CONFIG.depth`.
 
 ---
 
@@ -253,7 +265,8 @@ src/
   weapons/           weapon types, arsenal (inventory/ammo), firing, per-tick weapon system
   world/             World (the simulation), arena, waves/spawner, score/combo, pickups,
                      effects (beams/bolts), floating popups, obstacle steering
-  render/            cached background/grid/walls, CRT overlay, sprite cache
+  render/            cached background/grid/walls, 2.5D depth (extruded walls, shadows,
+                     floor lights), bloom, CRT overlay, sprite cache
   audio/             Web Audio engine, synthesized SFX, procedural synthwave music
   states/            title, play (Arcade or Zen), pause, settings, controls, game over / session summary
   ui/                HUD, touch HUD, menus, button prompts, text, toasts
@@ -263,4 +276,4 @@ src/
 - **Fixed timestep:** the simulation always advances at 60 updates/s; rendering runs at the display's refresh rate and interpolates between updates.
 - **Input abstraction:** game code asks about *actions* (`MOVE`, `AIM`, `FIRE`, `DASH`, …) — never raw keys or buttons.
 - **Performance:** bullets and particles are pooled; collisions use circle tests on a spatial grid (with swept tests so fast bullets can't tunnel); static layers and glow sprites are cached offscreen; the backing canvas is capped at 2× DPI.
-- **Dev tools:** press **`** / **F3** for the debug overlay (FPS, device, raw stick values). In dev builds, `__game` is available in the browser console, e.g. `__game.stack[0].world.waves.wave = 4` jumps to the boss when the current wave ends.
+- **Dev tools:** press **`** / **F3** for the debug overlay (FPS, bloom state, device, raw stick values). In dev builds, `__game` is available in the browser console, e.g. `__game.stack[0].world.waves.wave = 4` jumps to the boss when the current wave ends.
