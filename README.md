@@ -2,7 +2,7 @@
 
 A cyberpunk top-down **twin-stick shooter** for the browser. Built with **Vite + TypeScript + HTML5 Canvas** — no game engine, no image or audio files: every sprite, effect, sound and the synthwave soundtrack is generated in code.
 
-Survive escalating waves of drones, gunners, splitters and bruisers, with a **Warden** boss mech every 5 waves. Grab weapon drops and power-ups, chain kills for a score multiplier, and chase your high score — or switch to **Zen mode** and just flow.
+Survive escalating waves of drones, gunners, splitters and bruisers, with a **Warden** boss mech every 5 waves. Grab weapon drops and power-ups, chain kills for a score multiplier, and chase your high score — take on a **Rogue Run** through three floors of rooms, or switch to **Zen mode** and just flow.
 
 Plays with a **controller**, **keyboard & mouse**, or **touch** (iPhone / iPad / Android) — and switches between them on the fly.
 
@@ -24,6 +24,7 @@ npm run dev        # → http://localhost:5173
 | `npm run build` | Type-check (`tsc`) + production build into `dist/` |
 | `npm run preview` | Serve the production build locally |
 | `npm run typecheck` | Type-check only |
+| `npm test` | Unit tests (Vitest) |
 
 ### Hosting
 
@@ -109,6 +110,21 @@ Runs in **Safari 14+** on iOS, iPadOS and macOS (and any current Chrome / Edge /
 - You have **5 hits**. Dashing gives brief invulnerability — dash *through* bullets.
 - **Combo:** every 5 kills in a chain raises the score multiplier (up to ×8). Stop killing for 2.6 s and it starts dropping a level at a time; getting hit resets it.
 - Game over saves your **high score** (shown on the title screen).
+
+### Rogue Run
+
+Pick **ROGUE RUN** on the title screen for a room-to-room run with one life:
+
+- A run is **3 floors**, each **6 rooms and a Warden boss**. Every room has its own obstacle layout.
+- Clear a room's waves and **reward pedestals** rise in the middle. **Stand on one for half a second** (a ring fills) to take it; the others vanish. You can also skip them.
+- **Doors** open in the walls, labelled with what's behind them (**WEAPON**, **BOSS**, **NEXT FLOOR**). Walk into one to move on; you enter the next room from the opposite wall.
+- Your **HP and weapons carry over** between rooms. Weapons never run out of ammo here; you carry the Pulse Pistol plus up to 2 more (taking a new one swaps out the one in your hands). Beating a floor boss heals 2 HP.
+- Enemies don't drop weapons in a run, and buffs (Overclock, Shield, Health, EMP) drop half as often.
+- Dying, winning, or **Pause → Abandon Run** shows how far you got.
+
+Testing shortcuts: with the debug overlay on (**`** or **F3**), **K** clears the current room and **B** skips to the floor's boss.
+
+All run tuning lives in `CONFIG.run` in [`src/config.ts`](src/config.ts); the run logic is in [`src/run/`](src/run/). `npm test` runs the unit tests (Vitest).
 
 ### Zen mode
 
