@@ -5,6 +5,7 @@ import type { World } from '../world/world';
 import type { SfxName } from '../audio';
 import { WEAPONS } from './definitions';
 import { fireArc, fireProjectiles, fireRail } from './fire';
+import { applyStats } from './stats';
 
 /**
  * Per-tick player weapon logic: cycling, fire rate (with Overclock), the
@@ -25,7 +26,8 @@ export function updateWeapons(w: World, input: Input, dt: number): void {
     w.sound('swap');
   }
 
-  const def = ars.def;
+  // Rogue Run mods change the numbers; outside a run this is the weapon as defined.
+  const def = applyStats(ars.def, w.stats);
   const overclocked = p.overclock > 0;
   const rate = def.fireRate * (overclocked ? CONFIG.buffs.overclockRate : 1);
   const interval = 1 / rate;

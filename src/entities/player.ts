@@ -34,6 +34,8 @@ export class Player {
 
   dashTime = 0;
   dashCooldown = 0;
+  /** Rogue Run mods (BLINK DRIVE) shorten the dash cooldown. */
+  dashCooldownMult = 1;
   invulnTime = 0;
   private dashDirX = 0;
   private dashDirY = 0;
@@ -74,7 +76,7 @@ export class Player {
 
   /** 0..1, 1 = dash ready. */
   get dashReady(): number {
-    return 1 - this.dashCooldown / P.dash.cooldown;
+    return 1 - this.dashCooldown / (P.dash.cooldown * this.dashCooldownMult);
   }
 
   /** Apply one hit of damage from direction (nx, ny). Returns true if it was fatal. */
@@ -125,7 +127,7 @@ export class Player {
       }
       this.justDashed = true;
       this.dashTime = P.dash.duration;
-      this.dashCooldown = P.dash.cooldown;
+      this.dashCooldown = P.dash.cooldown * this.dashCooldownMult;
       this.invulnTime = Math.max(this.invulnTime, P.dash.duration + P.dash.iframeExtra);
       input.rumble(0.15, 0.35, 90);
     }

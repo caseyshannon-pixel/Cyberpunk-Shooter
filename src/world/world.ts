@@ -18,6 +18,7 @@ import { applyBloom } from '../render/bloom';
 import { drawLight, drawShadow, eyeProjector, graphicsMode, hiddenByStructure, type Projector, type Pt } from '../render/depth';
 import { applyTiltShift } from '../render/dof';
 import { TiltCamera } from '../render/tilt';
+import { NEUTRAL_STATS, type RunStats } from '../run/mods';
 import { entryPoint } from '../run/rooms';
 import type { Run } from '../run/run';
 import { Arsenal } from '../weapons/arsenal';
@@ -70,6 +71,8 @@ export class World implements ProjectileHost {
   readonly pickups = new PickupManager();
   readonly effects = new Effects();
   readonly score = new ScoreKeeper();
+  /** Rogue Run mods folded together (neutral in Arcade and Zen). */
+  stats: RunStats = NEUTRAL_STATS;
   readonly waves: Director;
   readonly grid: SpatialGrid<Enemy>;
 
