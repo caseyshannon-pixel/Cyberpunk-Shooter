@@ -142,6 +142,12 @@ describe('Run', () => {
     expect(run.carry.mods.blink).toBe(3);
   });
 
+  it('room 1 of floor 2 is a MOD room', () => {
+    const run = new Run(1280, 16);
+    while (run.room.floor < 2) run.advance(run.exits()[0], 'top');
+    expect(run.room).toMatchObject({ floor: 2, room: 1, reward: 'mod' });
+  });
+
   it('debugSkipToBoss keeps mods', () => {
     const run = new Run(1280, 15);
     run.addMod('split');

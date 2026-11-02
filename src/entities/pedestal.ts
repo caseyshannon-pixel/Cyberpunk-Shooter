@@ -1,10 +1,22 @@
 import { CONFIG } from '../config';
 import { TAU } from '../core/math';
+import { MODS, stacksOf, type ModStacks } from '../run/mods';
+import type { Reward } from '../run/rewards';
 import { font } from '../ui/text';
-import { WEAPONS, type WeaponId } from '../weapons/definitions';
+import { WEAPONS } from '../weapons/definitions';
 import { neonStroke } from './enemy';
 
 const RADIUS = 22;
+
+/** Display details of a reward. A mod's name carries the stack it would become, e.g. 'OVERVOLT 2/4'. */
+export function rewardInfo(r: Reward, stacks: ModStacks): { name: string; blurb: string; color: string; short: string } {
+  if (r.kind === 'weapon') {
+    const d = WEAPONS[r.id];
+    return { name: d.name, blurb: d.blurb ?? '', color: d.color, short: d.short };
+  }
+  const m = MODS[r.id];
+  return { name: `${m.name} ${stacksOf(stacks, r.id) + 1}/${m.max}`, blurb: m.blurb, color: m.color, short: m.short };
+}
 
 /**
  * A reward on the floor: stand on it for `CONFIG.run.takeTime` seconds to
@@ -19,7 +31,7 @@ export class Pedestal {
   readonly radius = RADIUS;
 
   constructor(
-    readonly weapon: WeaponId,
+    public reward: Reward,
     public x: number,
     public y: number,
   ) {}
@@ -44,9 +56,9 @@ export class Pedestal {
   }
 }
 
-/** Hexagonal plate with the weapon's diamond hovering over it, and the take ring. */
+/** Hexagonal plate with the reward hovering over it (weapons as diamonds, mods as chips), and the take ring. */
 export function renderPedestal(ctx: CanvasRenderingContext2D, p: Pedestal): void {
-  const def = WEAPONS[p.weapon];
+  const info = rewardInfo(p.reward, {});
   const r = p.radius;
   const bob = Math.sin(p.age * 3 + p.x) * 3;
   ctx.save();
@@ -62,7 +74,7 @@ export function renderPedestal(ctx: CanvasRenderingContext2D, p: Pedestal): void
   ctx.fillStyle = 'rgba(8, 2, 22, 0.85)';
   ctx.fill();
   ctx.globalAlpha = 0.6;
-  neonStroke(ctx, def.color, 1.5);
+  neonStroke(ctx, info.color, 1.5);
 
   // Take ring.
   const k = Math.min(1, p.hold / CONFIG.run.takeTime);
@@ -72,22 +84,25 @@ export function renderPedestal(ctx: CanvasRenderingContext2D, p: Pedestal): void
     neonStroke(ctx, '#ffffff', 3);
   }
 
-  // Weapon diamond.
   ctx.translate(0, bob - 4);
   const d = r * 0.75;
   ctx.beginPath();
-  ctx.moveTo(0, -d);
-  ctx.lineTo(d, 0);
-  ctx.lineTo(0, d);
-  ctx.lineTo(-d, 0);
-  ctx.closePath();
+  if (p.reward.kind === 'weapon') {
+    ctx.moveTo(0, -d);
+    ctx.lineTo(d, 0);
+    ctx.lineTo(0, d);
+    ctx.lineTo(-d, 0);
+    ctx.closePath();
+  } else {
+    ctx.rect(-d * 1.15, -d * 0.7, d * 2.3, d * 1.4);
+  }
   ctx.fillStyle = 'rgba(8, 2, 22, 0.9)';
   ctx.fill();
-  neonStroke(ctx, def.color, 2);
-  ctx.fillStyle = def.color;
+  neonStroke(ctx, info.color, 2);
+  ctx.fillStyle = info.color;
   ctx.font = font(9);
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.fillText(def.short, 0, 1);
+  ctx.fillText(info.short, 0, 1);
   ctx.restore();
 }

@@ -20,7 +20,7 @@ describe('exitsFor', () => {
 
   it('a boss room before the last floor leads to the next floor', () => {
     const exits = exitsFor(spec(1, R.roomsPerFloor + 1), createRng(1));
-    expect(exits).toEqual([{ type: 'combat', reward: 'weapon', label: 'NEXT FLOOR' }]);
+    expect(exits).toEqual([{ type: 'combat', reward: 'mod', label: 'NEXT FLOOR' }]);
   });
 
   it('the final boss has no exits', () => {
@@ -35,6 +35,19 @@ describe('exitsFor', () => {
         expect(exits.length).toBeGreaterThan(0);
         const keys = exits.map((e) => `${e.type}/${e.reward}`);
         expect(new Set(keys).size).toBe(keys.length);
+      }
+    }
+  });
+});
+
+describe('MOD doors', () => {
+  it('rooms 1–5 offer both a WEAPON and a MOD door', () => {
+    for (let seed = 0; seed < 200; seed++) {
+      const rng = createRng(seed);
+      for (let room = 1; room < R.roomsPerFloor; room++) {
+        const rewards = exitsFor(spec(1, room), rng).map((e) => e.reward);
+        expect(rewards).toContain('weapon');
+        expect(rewards).toContain('mod');
       }
     }
   });

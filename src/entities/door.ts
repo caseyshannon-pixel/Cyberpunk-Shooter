@@ -9,7 +9,7 @@ const contact: Contact = { nx: 0, ny: 0, depth: 0 };
 function doorColor(o: DoorOption): string {
   if (o.type === 'boss') return COLORS.red;
   if (o.label === 'NEXT FLOOR') return COLORS.cyan;
-  return COLORS.yellow;
+  return o.reward === 'mod' ? COLORS.lime : COLORS.yellow;
 }
 
 /** A gate in the arena wall that opens once a room is cleared; walk into it to leave. */

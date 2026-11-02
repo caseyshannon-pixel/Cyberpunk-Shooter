@@ -4,11 +4,15 @@ import type { DoorOption, RoomSpec, WallSide } from './rooms';
 
 const R = CONFIG.run;
 
-/** Rooms a door can lead to before the boss. Later phases add mods, elites, shops and rests. */
-export const OFFERABLE: readonly DoorOption[] = [{ type: 'combat', reward: 'weapon', label: 'WEAPON' }];
+/** Rooms a door can lead to before the boss. Later phases add elites, shops and rests. */
+export const OFFERABLE: readonly DoorOption[] = [
+  { type: 'combat', reward: 'weapon', label: 'WEAPON' },
+  { type: 'combat', reward: 'mod', label: 'MOD' },
+];
 
 const BOSS_DOOR: DoorOption = { type: 'boss', reward: 'none', label: 'BOSS' };
-const NEXT_FLOOR_DOOR: DoorOption = { type: 'combat', reward: 'weapon', label: 'NEXT FLOOR' };
+/** Room 1 of floors 2–3 is a MOD room (floor 1 opens with a weapon). */
+const NEXT_FLOOR_DOOR: DoorOption = { type: 'combat', reward: 'mod', label: 'NEXT FLOOR' };
 
 /** The doors that open when `spec` is cleared. Empty after the final boss (the run is won). */
 export function exitsFor(spec: RoomSpec, rng: Rng): DoorOption[] {

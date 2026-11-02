@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { CONFIG } from '../config';
 import type { Door } from '../entities/door';
+import type { ModId } from '../run/mods';
 import { Run } from '../run/run';
 import { RoomDirector } from './roomDirector';
 import { WaveDirector } from './waves';
@@ -58,7 +59,10 @@ describe('RoomDirector', () => {
     clearRoom(w, d);
     expect(d.stage).toBe('reward');
     expect(d.pedestals).toHaveLength(3);
-    for (const p of d.pedestals) expect(['pulse', 'spread']).not.toContain(p.weapon);
+    for (const p of d.pedestals) {
+      expect(p.reward.kind).toBe('weapon');
+      expect(['pulse', 'spread']).not.toContain(p.reward.id);
+    }
     expect(run.roomsCleared).toBe(1);
   });
 
@@ -69,8 +73,60 @@ describe('RoomDirector', () => {
     w.player.x = target.x;
     w.player.y = target.y;
     for (let i = 0; i < 40; i++) d.update(DT, w);
-    expect(w.player.arsenal.current.id).toBe(target.weapon);
+    expect(w.player.arsenal.current.id).toBe(target.reward.id);
     expect(d.pedestals).toHaveLength(0);
+  });
+
+  /** A cleared MOD room whose middle pedestal is `id`, with the player standing next to it. */
+  function modRoom(seed: number, id: ModId) {
+    const run = new Run(1280, seed);
+    run.advance({ type: 'combat', reward: 'mod', label: 'MOD' }, 'top');
+    const ctx = setup(run);
+    clearRoom(ctx.w, ctx.d);
+    const ped = ctx.d.pedestals[1];
+    ped.reward = { kind: 'mod', id };
+    return { ...ctx, run, ped };
+  }
+
+  function standOn(w: World, d: RoomDirector, x: number, y: number): void {
+    w.player.x = x + 200;
+    w.player.y = y;
+    d.update(DT, w); // off it first (pedestals arm once you've been away)
+    w.player.x = x;
+    for (let i = 0; i < 40; i++) d.update(DT, w);
+  }
+
+  it('a MOD room offers mods', () => {
+    const run = new Run(1280, 21);
+    run.advance({ type: 'combat', reward: 'mod', label: 'MOD' }, 'top');
+    const { w, d } = setup(run);
+    clearRoom(w, d);
+    expect(d.pedestals).toHaveLength(3);
+    for (const p of d.pedestals) expect(p.reward.kind).toBe('mod');
+  });
+
+  it('taking a mod applies it immediately', () => {
+    const { w, d, run, ped } = modRoom(22, 'overvolt');
+    standOn(w, d, ped.x, ped.y);
+    expect(run.carry.mods.overvolt).toBe(1);
+    expect(w.stats.damageMult).toBeCloseTo(1.25);
+    expect(d.pedestals).toHaveLength(0);
+  });
+
+  it('taking BLINK DRIVE refreshes the dash cooldown at once', () => {
+    const { w, d, ped } = modRoom(23, 'blink');
+    standOn(w, d, ped.x, ped.y);
+    expect(w.player.dashCooldownMult).toBeCloseTo(0.8);
+  });
+
+  it('hull raises max HP and heals', () => {
+    const a = modRoom(24, 'hull');
+    a.w.player.health = 3;
+    standOn(a.w, a.d, a.ped.x, a.ped.y);
+    expect([a.w.player.health, a.w.player.maxHealth]).toEqual([4, 6]);
+    const b = modRoom(25, 'hull');
+    standOn(b.w, b.d, b.ped.x, b.ped.y);
+    expect([b.w.player.health, b.w.player.maxHealth]).toEqual([6, 6]);
   });
 
   it('doorEnteredOnce: walking into a door exits exactly once', () => {

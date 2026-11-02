@@ -6,7 +6,7 @@ const R = CONFIG.run;
 
 export type WallSide = 'top' | 'bottom' | 'left' | 'right';
 export type RoomType = 'combat' | 'boss';
-export type RoomReward = 'weapon' | 'none';
+export type RoomReward = 'weapon' | 'mod' | 'none';
 export type LayoutId = 'classic' | 'open' | 'cross' | 'ring' | 'lanes' | 'scatter' | 'bunkers' | 'diagonal' | 'gates';
 
 /** An obstacle relative to the arena centre; `dx` is scaled by the arena's width (wide screens get wider layouts). */

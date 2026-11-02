@@ -2,12 +2,12 @@ import { CONFIG } from '../config';
 import { vec } from '../core/math';
 import { Door, renderDoor } from '../entities/door';
 import type { EnemyKind } from '../entities/enemy';
-import { Pedestal, renderPedestal } from '../entities/pedestal';
+import { Pedestal, renderPedestal, rewardInfo } from '../entities/pedestal';
 import { assignWalls } from '../run/floorPlan';
-import { rollWeaponChoices } from '../run/rewards';
+import { computeStats } from '../run/mods';
+import { rollRewards } from '../run/rewards';
 import { budgetFor, hpScaleFor, speedScaleFor, wavesFor } from '../run/rooms';
 import type { Run } from '../run/run';
-import { WEAPONS } from '../weapons/definitions';
 import type { Director } from './director';
 import { pickKind, queueSpawn, renderMarkers, updateMarkers, type SpawnMarker, type WavePhase } from './waves';
 import type { World } from './world';
@@ -150,15 +150,13 @@ export class RoomDirector implements Director {
       if (w.player.alive) this.winTimer = R.victoryDelay;
       return;
     }
-    if (this.run.room.reward === 'weapon') {
-      const picks = rollWeaponChoices(this.run.rng, w.player.arsenal.ids(), R.rewardChoices);
-      const a = w.arena;
-      picks.forEach((id, i) => {
-        const x = a.centerX + (i - (picks.length - 1) / 2) * R.pedestalSpacing;
-        this.pedestals.push(new Pedestal(id, x, a.centerY));
-        w.particles.ring(x, a.centerY, WEAPONS[id].color, 60, 0.4, 3);
-      });
-    }
+    const picks = rollRewards(this.run.rng, this.run.room.reward, w.player.arsenal.ids(), this.run.carry.mods, R.rewardChoices);
+    const a = w.arena;
+    picks.forEach((reward, i) => {
+      const x = a.centerX + (i - (picks.length - 1) / 2) * R.pedestalSpacing;
+      this.pedestals.push(new Pedestal(reward, x, a.centerY));
+      w.particles.ring(x, a.centerY, rewardInfo(reward, {}).color, 60, 0.4, 3);
+    });
     const exits = this.run.exits();
     const walls = assignWalls(exits.length, this.run.room.entry, this.run.rng);
     exits.forEach((o, i) => this.doors.push(new Door(o, walls[i], w.arena.bounds)));
@@ -191,14 +189,26 @@ export class RoomDirector implements Director {
 
   private take(ped: Pedestal, w: World): void {
     const p = w.player;
-    const def = WEAPONS[ped.weapon];
-    p.arsenal.add(ped.weapon);
-    p.charge = 0;
-    for (const o of this.pedestals) if (o !== ped) w.particles.burst(o.x, o.y, WEAPONS[o.weapon].color, 10, 30, 140, 0.2, 0.4, 1.5);
+    const run = this.run;
+    const info = rewardInfo(ped.reward, run.carry.mods);
+    const r = ped.reward;
+    if (r.kind === 'weapon') {
+      p.arsenal.add(r.id);
+      p.charge = 0;
+    } else if (run.addMod(r.id)) {
+      // Mods take effect at once, not from the next room.
+      w.stats = computeStats(run.carry.mods);
+      p.dashCooldownMult = w.stats.dashCooldownMult;
+      if (r.id === 'hull') {
+        p.maxHealth += CONFIG.mods.hull.effect.maxHealth;
+        p.health = Math.min(p.maxHealth, p.health + 1);
+      }
+    }
+    for (const o of this.pedestals) if (o !== ped) w.particles.burst(o.x, o.y, rewardInfo(o.reward, {}).color, 10, 30, 140, 0.2, 0.4, 1.5);
     this.pedestals.length = 0;
-    w.sound('pickupWeapon');
-    w.popups.add(p.x, p.y - 34, def.name, def.color, 15, 1.2);
-    w.particles.ring(p.x, p.y, def.color, 60, 0.4, 3);
+    w.sound(r.kind === 'weapon' ? 'pickupWeapon' : 'pickupBuff');
+    w.popups.add(p.x, p.y - 34, r.kind === 'weapon' ? info.name : CONFIG.mods[r.id].name, info.color, 15, 1.2);
+    w.particles.ring(p.x, p.y, info.color, 60, 0.4, 3);
     w.rumble(0.25, 0.5, 120);
   }
 

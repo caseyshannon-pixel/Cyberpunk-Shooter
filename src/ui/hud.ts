@@ -6,7 +6,8 @@ import { Action, Axis } from '../input/bindings';
 import type { Input } from '../input/input';
 import { WEAPONS } from '../weapons/definitions';
 import { TAU } from '../core/math';
-import type { Pedestal } from '../entities/pedestal';
+import { rewardInfo, type Pedestal } from '../entities/pedestal';
+import type { ModStacks } from '../run/mods';
 import { RoomDirector } from '../world/roomDirector';
 import type { World } from '../world/world';
 import { renderPrompts, type PromptEntry } from './prompts';
@@ -46,7 +47,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
 
   renderScore(ctx, world);
   renderBossBar(ctx, world);
-  if (world.waves instanceof RoomDirector) renderPedestalInfo(ctx, world.waves.nearPedestal(world));
+  if (world.run && world.waves instanceof RoomDirector) renderPedestalInfo(ctx, world.waves.nearPedestal(world), world.run.carry.mods);
 
   const weaponLeft = renderWeapon(ctx, player);
   renderBuffs(ctx, player, weaponLeft - 26);
@@ -58,12 +59,12 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
 }
 
 /** Rogue Run: name and description of the reward pedestal the player is standing near. */
-function renderPedestalInfo(ctx: CanvasRenderingContext2D, ped: Pedestal | null): void {
+function renderPedestalInfo(ctx: CanvasRenderingContext2D, ped: Pedestal | null, mods: ModStacks): void {
   if (!ped) return;
-  const def = WEAPONS[ped.weapon];
+  const info = rewardInfo(ped.reward, mods);
   const y = VIEW.height - 84;
-  glowText(ctx, def.name, VIEW.width / 2, y, { size: 20, color: def.color, align: 'center', blur: 12 });
-  if (def.blurb) glowText(ctx, def.blurb, VIEW.width / 2, y + 24, { size: 14, color: COLORS.white, align: 'center', blur: 4 });
+  glowText(ctx, info.name, VIEW.width / 2, y, { size: 20, color: info.color, align: 'center', blur: 12 });
+  if (info.blurb) glowText(ctx, info.blurb, VIEW.width / 2, y + 24, { size: 14, color: COLORS.white, align: 'center', blur: 4 });
 }
 
 /** Health pips + wave number (top-left). */
