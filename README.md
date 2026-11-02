@@ -117,9 +117,24 @@ Pick **ROGUE RUN** on the title screen for a room-to-room run with one life:
 
 - A run is **3 floors**, each **6 rooms and a Warden boss**. Every room has its own obstacle layout.
 - Clear a room's waves and **reward pedestals** rise in the middle. **Stand on one for half a second** (a ring fills) to take it; the others vanish. You can also skip them.
-- **Doors** open in the walls, labelled with what's behind them (**WEAPON**, **BOSS**, **NEXT FLOOR**). Walk into one to move on; you enter the next room from the opposite wall.
+- **Doors** open in the walls, labelled with what's behind them (**WEAPON**, **MOD**, **BOSS**, **NEXT FLOOR**). Walk into one to move on; you enter the next room from the opposite wall. The first room of floors 2 and 3 is always a MOD room.
 - Your **HP and weapons carry over** between rooms. Weapons never run out of ammo here; you carry the Pulse Pistol plus up to 2 more. When both slots are full, a new weapon replaces the one in your hands — or, if you're holding the Pistol, the one you took most recently. Standing where a pedestal appears doesn't take it; step off and back on. Beating a floor boss heals 2 HP.
+- **Mods** stack and last the whole run, applying to whatever weapon you hold. They show as chips under your health (`VOLT×2` = two stacks). Standing near a mod pedestal shows the stack you'd get, e.g. *OVERVOLT 2/4*. If every mod is maxed, MOD rooms offer weapons instead.
 - Enemies don't drop weapons in a run, and buffs (Overclock, Shield, Health, EMP) drop half as often.
+
+| Mod | Per stack | Max |
+|---|---|---|
+| **OVERVOLT** | +25% damage | 4 |
+| **RAPID CYCLE** | +20% fire rate | 4 |
+| **SPLIT SHOT** | +1 projectile per shot (single-shot weapons fan out; Spread and Nova get denser) | 3 |
+| **PHASE ROUNDS** | Shots pierce +1 enemy | 3 |
+| **BOUNCE CORE** | Shots bounce off walls +1 | 3 |
+| **HEAVY CALIBER** | +30% shot size (and Rail beam width), +15% damage | 2 |
+| **BLINK DRIVE** | −20% dash cooldown | 3 |
+| **REINFORCED HULL** | +1 max HP and heal 1 | 3 |
+| **AEGIS** | Start each room with +1 shield hit | 2 |
+
+Split shot, pierce and bounce only affect projectile weapons (not the Rail or Arc Lightning). Mods are data in `MOD_DEFS` in [`src/config.ts`](src/config.ts).
 - Dying, winning, or **Pause → Abandon Run** shows how far you got.
 
 Testing shortcuts: with the debug overlay on (**`** or **F3**), **K** clears the current room and **B** skips to the floor's boss.
