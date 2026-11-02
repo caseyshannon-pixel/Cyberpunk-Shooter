@@ -18,7 +18,7 @@ import { applyBloom } from '../render/bloom';
 import { drawLight, drawShadow, eyeProjector, graphicsMode, hiddenByStructure, type Projector, type Pt } from '../render/depth';
 import { applyTiltShift } from '../render/dof';
 import { TiltCamera } from '../render/tilt';
-import { NEUTRAL_STATS, type RunStats } from '../run/mods';
+import { computeStats, NEUTRAL_STATS, type RunStats } from '../run/mods';
 import { entryPoint } from '../run/rooms';
 import type { Run } from '../run/run';
 import { Arsenal } from '../weapons/arsenal';
@@ -110,6 +110,13 @@ export class World implements ProjectileHost {
       this.player = new Player(at.x, at.y, new Arsenal({ infiniteAmmo: true, maxExtra: CONFIG.run.maxExtraWeapons }));
       this.player.aimAngle = this.player.prevAimAngle = Math.atan2(this.arena.centerY - at.y, this.arena.centerX - at.x);
       run.applyTo(this.player, this.score);
+      this.stats = computeStats(run.carry.mods);
+      this.player.dashCooldownMult = this.stats.dashCooldownMult;
+      // AEGIS: every room starts shielded.
+      if (this.stats.shieldPerRoom > 0) {
+        this.player.shield = this.stats.shieldPerRoom;
+        this.player.shieldHitAge = 1;
+      }
     } else {
       this.waves = new WaveDirector(mode === 'zen');
       this.player = new Player(this.arena.centerX, this.arena.centerY + 120);

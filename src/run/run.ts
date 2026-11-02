@@ -4,6 +4,7 @@ import type { Player } from '../entities/player';
 import type { WeaponId } from '../weapons/definitions';
 import type { ScoreKeeper } from '../world/score';
 import { exitsFor } from './floorPlan';
+import { canStack, type ModId, type ModStacks } from './mods';
 import { COMBAT_LAYOUTS, opposite, type DoorOption, type RoomSpec, type WallSide } from './rooms';
 
 const R = CONFIG.run;
@@ -16,6 +17,8 @@ export interface Carry {
   equipped: number;
   /** Slot of the weapon taken last (replaced first when the Pistol is equipped). */
   newest: number;
+  /** Mod stacks taken this run. */
+  mods: ModStacks;
 }
 
 export type RunOutcome = 'active' | 'dead' | 'victory' | 'abandoned';
@@ -27,7 +30,7 @@ export type RunOutcome = 'active' | 'dead' | 'victory' | 'abandoned';
 export class Run {
   readonly rng: Rng;
   room: RoomSpec;
-  carry: Carry = { health: CONFIG.player.maxHealth, maxHealth: CONFIG.player.maxHealth, weapons: ['pulse'], equipped: 0, newest: 0 };
+  carry: Carry = { health: CONFIG.player.maxHealth, maxHealth: CONFIG.player.maxHealth, weapons: ['pulse'], equipped: 0, newest: 0, mods: {} };
   score = 0;
   kills = 0;
   roomsCleared = 0;
@@ -77,6 +80,7 @@ export class Run {
       weapons: player.arsenal.ids(),
       equipped: player.arsenal.index,
       newest: player.arsenal.newest,
+      mods: this.carry.mods,
     };
     this.score = score.score;
     this.kills = score.kills;
@@ -89,6 +93,13 @@ export class Run {
     player.arsenal.restore(this.carry.weapons, this.carry.equipped, this.carry.newest);
     score.score = this.score;
     score.kills = this.kills;
+  }
+
+  /** Take one more stack of a mod; false (and no change) if it's already maxed. */
+  addMod(id: ModId): boolean {
+    if (!canStack(this.carry.mods, id)) return false;
+    this.carry.mods[id] = (this.carry.mods[id] ?? 0) + 1;
+    return true;
   }
 
   /** Debug: jump straight to this floor's boss room. */

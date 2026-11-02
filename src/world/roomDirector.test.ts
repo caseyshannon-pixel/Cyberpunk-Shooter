@@ -40,6 +40,17 @@ describe('RoomDirector', () => {
     expect(d.bannerText).toBe('FLOOR 1 · ROOM 1');
   });
 
+  it('a run room starts with the run\'s stats', () => {
+    const run = new Run(1280, 20);
+    run.addMod('blink');
+    run.addMod('aegis');
+    run.addMod('aegis');
+    const { w } = setup(run);
+    expect(w.stats.dashCooldownMult).toBeCloseTo(0.8);
+    expect(w.player.dashCooldownMult).toBeCloseTo(0.8);
+    expect(w.player.shield).toBe(2);
+  });
+
   it('rewardPedestals: a cleared weapon room offers 3 weapons the player does not hold', () => {
     const run = new Run(1280, 2);
     run.carry.weapons = ['pulse', 'spread'];

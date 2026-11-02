@@ -23,7 +23,7 @@ describe('Run', () => {
     const run = new Run(1280, 1);
     expect(run.room).toMatchObject({ floor: 1, room: 1, type: 'combat', reward: 'weapon', entry: 'bottom' });
     expect(COMBAT_LAYOUTS).toContain(run.room.layout);
-    expect(run.carry).toEqual({ health: 5, maxHealth: 5, weapons: ['pulse'], equipped: 0, newest: 0 });
+    expect(run.carry).toEqual({ health: 5, maxHealth: 5, weapons: ['pulse'], equipped: 0, newest: 0, mods: {} });
     expect(run.outcome).toBe('active');
   });
 
@@ -120,6 +120,33 @@ describe('Run', () => {
     room('nova', 1); // spread equipped → replaced: [P, nova, homing]; nova is newest
     const p = room('arc', 0); // Pistol equipped → replaces nova (newest), not homing
     expect(p.arsenal.ids()).toEqual(['pulse', 'arc', 'homing']);
+  });
+
+  it('mods survive captureFrom, applyTo and advancing through a boss', () => {
+    const run = new Run(1280, 13);
+    expect(run.addMod('overvolt')).toBe(true);
+    expect(run.addMod('overvolt')).toBe(true);
+    const p = new Player(0, 0, new Arsenal({ infiniteAmmo: true, maxExtra: 2 }));
+    const s = new ScoreKeeper();
+    run.applyTo(p, s);
+    run.captureFrom(p, s);
+    while (!run.isBossRoom) run.advance(run.exits()[0], 'top');
+    run.advance(run.exits()[0], 'top');
+    expect(run.carry.mods).toEqual({ overvolt: 2 });
+  });
+
+  it('addMod refuses past max', () => {
+    const run = new Run(1280, 14);
+    for (let i = 0; i < 3; i++) expect(run.addMod('blink')).toBe(true);
+    expect(run.addMod('blink')).toBe(false);
+    expect(run.carry.mods.blink).toBe(3);
+  });
+
+  it('debugSkipToBoss keeps mods', () => {
+    const run = new Run(1280, 15);
+    run.addMod('split');
+    run.debugSkipToBoss();
+    expect(run.carry.mods).toEqual({ split: 1 });
   });
 
   it('debugSkipToBoss jumps to the current floor boss room', () => {
