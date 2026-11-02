@@ -1,13 +1,14 @@
 import { CONFIG } from '../config';
 import { TAU, vec } from '../core/math';
 import type { EnemyKind } from '../entities/enemy';
+import type { Director } from './director';
 import type { World } from './world';
 
 const W = CONFIG.waves;
 
 export type WavePhase = 'cleared' | 'intro' | 'active';
 
-interface SpawnMarker {
+export interface SpawnMarker {
   kind: EnemyKind;
   x: number;
   y: number;
@@ -20,7 +21,7 @@ interface SpawnMarker {
  * to be clear → breather → next wave. Each wave gets a growing point budget
  * spent on weighted-random enemy picks; every `bossEvery` waves a boss shows up.
  */
-export class WaveDirector {
+export class WaveDirector implements Director {
   /** Arcade: wave number. Zen: the current difficulty tier (which enemy types are in the mix). */
   wave = 0;
   phase: WavePhase = 'cleared';
@@ -55,6 +56,27 @@ export class WaveDirector {
 
   get remaining(): number {
     return this.queue.length + this.markers.length;
+  }
+
+  /** Each boss is tougher than the last. */
+  get bossNumber(): number {
+    return Math.max(1, Math.round(this.wave / W.bossEvery));
+  }
+
+  get bossHpScale(): number {
+    return 1 + (this.bossNumber - 1) * CONFIG.enemies.boss.hpPerBoss;
+  }
+
+  get label(): string {
+    return this.wave > 0 ? `WAVE ${this.wave}` : '';
+  }
+
+  get bannerText(): string {
+    return `WAVE ${this.wave}`;
+  }
+
+  get clearText(): string {
+    return 'WAVE CLEAR';
   }
 
   update(dt: number, w: World): void {
@@ -116,20 +138,7 @@ export class WaveDirector {
 
   /** Weighted-random enemy kind among those unlocked by `wave` and costing at most `budget`. */
   private pickKind(wave: number, budget: number): EnemyKind | null {
-    const kinds = (Object.keys(CONFIG.enemies) as EnemyKind[]).filter((k) => {
-      const d = CONFIG.enemies[k];
-      // cost > 0 keeps budget loops finite; weight 0 = never spawned by the director.
-      return d.weight > 0 && d.cost > 0 && d.minWave <= wave && d.cost <= budget;
-    });
-    if (!kinds.length) return null;
-    let total = 0;
-    for (const k of kinds) total += CONFIG.enemies[k].weight;
-    let r = Math.random() * total;
-    for (const k of kinds) {
-      r -= CONFIG.enemies[k].weight;
-      if (r <= 0) return k;
-    }
-    return kinds[0];
+    return pickKind((Object.keys(CONFIG.enemies) as EnemyKind[]).filter((k) => CONFIG.enemies[k].minWave <= wave), budget);
   }
 
   private setPhase(phase: WavePhase): void {
@@ -165,53 +174,83 @@ export class WaveDirector {
 
   private spawnNext(w: World): void {
     const kind = this.queue.shift();
-    if (!kind) return;
-    const r = CONFIG.enemies[kind].radius;
-    if (kind === 'boss') {
-      this.pt.x = w.arena.centerX;
-      this.pt.y = w.arena.bounds.y + 110;
-      if (Math.abs(w.player.y - this.pt.y) < 160) this.pt.y = w.arena.bounds.y + w.arena.bounds.h - 110;
-    } else {
-      w.arena.spawnPoint(w.player.x, w.player.y, W.minSpawnDistance, r, this.pt);
-    }
-    const total = kind === 'boss' ? W.bossTelegraph : W.spawnTelegraph;
-    this.markers.push({ kind, x: this.pt.x, y: this.pt.y, timer: total, total });
+    if (kind) queueSpawn(kind, w, this.markers, this.pt);
   }
 
   private updateMarkers(dt: number, w: World): void {
-    for (let i = this.markers.length - 1; i >= 0; i--) {
-      const m = this.markers[i];
-      m.timer -= dt;
-      if (m.timer <= 0) {
-        this.markers.splice(i, 1);
-        w.spawnEnemy(m.kind, m.x, m.y);
-      }
-    }
+    updateMarkers(this.markers, dt, w);
   }
 
   renderMarkers(ctx: CanvasRenderingContext2D, time: number): void {
-    if (!this.markers.length) return;
-    ctx.save();
-    ctx.globalCompositeOperation = 'lighter';
-    for (const m of this.markers) {
-      const def = CONFIG.enemies[m.kind];
-      const k = 1 - m.timer / m.total; // 0 → 1
-      const r = def.radius * (2.6 - k * 1.6);
-      ctx.strokeStyle = def.color;
-      ctx.globalAlpha = 0.25 + 0.5 * k * (0.6 + 0.4 * Math.sin(time * 30));
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.arc(m.x, m.y, r, 0, TAU);
-      ctx.stroke();
-      // Rotating crosshair ticks.
-      ctx.beginPath();
-      for (let i = 0; i < 4; i++) {
-        const a = time * 3 + (i * TAU) / 4;
-        ctx.moveTo(m.x + Math.cos(a) * (r + 4), m.y + Math.sin(a) * (r + 4));
-        ctx.lineTo(m.x + Math.cos(a) * (r + 12), m.y + Math.sin(a) * (r + 12));
-      }
-      ctx.stroke();
-    }
-    ctx.restore();
+    renderMarkers(ctx, this.markers, time);
   }
+}
+
+/** Weighted-random pick among `kinds` the spawner may use (weight and cost > 0) costing at most `budget`. */
+export function pickKind(kinds: readonly EnemyKind[], budget: number): EnemyKind | null {
+  const usable = kinds.filter((k) => {
+    const d = CONFIG.enemies[k];
+    // cost > 0 keeps budget loops finite; weight 0 = never spawned by a director.
+    return d.weight > 0 && d.cost > 0 && d.cost <= budget;
+  });
+  if (!usable.length) return null;
+  let total = 0;
+  for (const k of usable) total += CONFIG.enemies[k].weight;
+  let r = Math.random() * total;
+  for (const k of usable) {
+    r -= CONFIG.enemies[k].weight;
+    if (r <= 0) return k;
+  }
+  return usable[0];
+}
+
+/** Telegraph an enemy: a marker that turns into the enemy when its timer runs out. */
+export function queueSpawn(kind: EnemyKind, w: World, markers: SpawnMarker[], pt: { x: number; y: number }): void {
+  const r = CONFIG.enemies[kind].radius;
+  if (kind === 'boss') {
+    pt.x = w.arena.centerX;
+    pt.y = w.arena.bounds.y + 110;
+    if (Math.abs(w.player.y - pt.y) < 160) pt.y = w.arena.bounds.y + w.arena.bounds.h - 110;
+  } else {
+    w.arena.spawnPoint(w.player.x, w.player.y, W.minSpawnDistance, r, pt);
+  }
+  const total = kind === 'boss' ? W.bossTelegraph : W.spawnTelegraph;
+  markers.push({ kind, x: pt.x, y: pt.y, timer: total, total });
+}
+
+export function updateMarkers(markers: SpawnMarker[], dt: number, w: World): void {
+  for (let i = markers.length - 1; i >= 0; i--) {
+    const m = markers[i];
+    m.timer -= dt;
+    if (m.timer <= 0) {
+      markers.splice(i, 1);
+      w.spawnEnemy(m.kind, m.x, m.y);
+    }
+  }
+}
+
+export function renderMarkers(ctx: CanvasRenderingContext2D, markers: readonly SpawnMarker[], time: number): void {
+  if (!markers.length) return;
+  ctx.save();
+  ctx.globalCompositeOperation = 'lighter';
+  for (const m of markers) {
+    const def = CONFIG.enemies[m.kind];
+    const k = 1 - m.timer / m.total; // 0 → 1
+    const r = def.radius * (2.6 - k * 1.6);
+    ctx.strokeStyle = def.color;
+    ctx.globalAlpha = 0.25 + 0.5 * k * (0.6 + 0.4 * Math.sin(time * 30));
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    ctx.arc(m.x, m.y, r, 0, TAU);
+    ctx.stroke();
+    // Rotating crosshair ticks.
+    ctx.beginPath();
+    for (let i = 0; i < 4; i++) {
+      const a = time * 3 + (i * TAU) / 4;
+      ctx.moveTo(m.x + Math.cos(a) * (r + 4), m.y + Math.sin(a) * (r + 4));
+      ctx.lineTo(m.x + Math.cos(a) * (r + 12), m.y + Math.sin(a) * (r + 12));
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
 }

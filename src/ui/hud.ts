@@ -80,10 +80,9 @@ function renderHealth(ctx: CanvasRenderingContext2D, world: World): void {
   }
   ctx.restore();
 
-  // Wave number next to the health pips.
-  if (world.waves.wave > 0) {
-    glowText(ctx, `WAVE ${world.waves.wave}`, 56 + player.maxHealth * 22 + 10, 20, { size: 14, color: COLORS.purple, blur: 6 });
-  }
+  // Wave number (or floor · room) next to the health pips.
+  const label = world.waves.label;
+  if (label) glowText(ctx, label, 56 + player.maxHealth * 22 + 10, 20, { size: 14, color: COLORS.purple, blur: 6 });
 }
 
 /** Dash cooldown arc drawn around the player while recharging. */
@@ -200,7 +199,7 @@ function renderBossBar(ctx: CanvasRenderingContext2D, world: World): void {
   const k = Math.max(0, boss.hp / boss.maxHp);
   const g = Math.max(0, s.displayHp / boss.maxHp);
   const color = s.enraged ? COLORS.red : COLORS.purple;
-  const bossNo = Math.max(1, Math.round(world.waves.wave / CONFIG.waves.bossEvery));
+  const bossNo = world.waves.bossNumber;
 
   ctx.save();
   ctx.fillStyle = 'rgba(10, 2, 25, 0.8)';
@@ -243,7 +242,7 @@ export function renderWaveBanner(ctx: CanvasRenderingContext2D, world: World): v
     ctx.fillRect(0, H / 2 + 60, W, 2);
     ctx.fillRect(sweep - 200, H / 2 - 62, 200, 2);
     ctx.restore();
-    glowText(ctx, `WAVE ${waves.wave}`, W / 2, H / 2 - 10, {
+    glowText(ctx, waves.bannerText, W / 2, H / 2 - 10, {
       size: Math.round(64 * scale),
       color: COLORS.white,
       glow: waves.isBossWave ? COLORS.red : COLORS.magenta,
@@ -261,7 +260,7 @@ export function renderWaveBanner(ctx: CanvasRenderingContext2D, world: World): v
     });
   } else if (waves.phase === 'cleared' && waves.wave > 0 && t < 1.6) {
     const a = Math.min(1, t / 0.2, (1.6 - t) / 0.4);
-    glowText(ctx, 'WAVE CLEAR', W / 2, H / 2 - 10, { size: 44, color: COLORS.cyan, blur: 18, align: 'center', alpha: a });
+    glowText(ctx, waves.clearText, W / 2, H / 2 - 10, { size: 44, color: COLORS.cyan, blur: 18, align: 'center', alpha: a });
   }
 }
 

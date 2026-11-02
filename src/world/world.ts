@@ -3,6 +3,7 @@ import { circleCircle, segmentCircle, type Contact } from '../core/collision';
 import { approach, len, lerp, TAU, type Vec2 } from '../core/math';
 import { SpatialGrid } from '../core/spatialGrid';
 import { createBossState, renderBoss } from '../entities/boss';
+import type { Door } from '../entities/door';
 import { Enemy, renderEnemy, type EnemyKind } from '../entities/enemy';
 import { ENEMY_AI } from '../entities/enemyAI';
 import { Particles } from '../entities/particles';
@@ -17,19 +18,27 @@ import { applyBloom } from '../render/bloom';
 import { drawLight, drawShadow, eyeProjector, graphicsMode, hiddenByStructure, type Projector, type Pt } from '../render/depth';
 import { applyTiltShift } from '../render/dof';
 import { TiltCamera } from '../render/tilt';
+import { entryPoint } from '../run/rooms';
+import type { Run } from '../run/run';
+import { Arsenal } from '../weapons/arsenal';
 import { updateWeapons } from '../weapons/weaponSystem';
 import { Arena } from './arena';
+import type { Director } from './director';
 import { Effects } from './effects';
 import { PickupManager } from './pickups';
 import { Popups } from './popups';
 import { ScoreKeeper } from './score';
+import { RoomDirector } from './roomDirector';
 import { WaveDirector } from './waves';
 import { VIEW } from '../core/view';
 
 const C = CONFIG.combat;
 
-/** Arcade: waves, bosses, health. Zen: no damage, endless calm flow (see CONFIG.zen). */
-export type GameMode = 'arcade' | 'zen';
+/**
+ * Arcade: waves, bosses, health. Zen: no damage, endless calm flow (see CONFIG.zen).
+ * Run: one room of a Rogue Run (see src/run/).
+ */
+export type GameMode = 'arcade' | 'zen' | 'run';
 
 /** Side effects the world asks the outside (game/UI/audio) to perform. */
 export interface WorldHooks {
@@ -39,6 +48,10 @@ export interface WorldHooks {
   sound(name: SfxName, x?: number): void;
   /** A wave began (drives music intensity, alarms). */
   waveStarted(wave: number, boss: boolean): void;
+  /** Rogue Run: the player walked through a door. */
+  roomExited?(door: Door): void;
+  /** Rogue Run: the final boss is down. */
+  runWon?(): void;
 }
 
 /**
@@ -48,7 +61,7 @@ export interface WorldHooks {
 export class World implements ProjectileHost {
   /** Logical view width this run was created for. */
   readonly viewWidth = VIEW.width;
-  readonly arena = new Arena(this.viewWidth);
+  readonly arena: Arena;
   readonly player: Player;
   readonly enemies: Enemy[] = [];
   readonly projectiles = new Projectiles();
@@ -57,7 +70,7 @@ export class World implements ProjectileHost {
   readonly pickups = new PickupManager();
   readonly effects = new Effects();
   readonly score = new ScoreKeeper();
-  readonly waves: WaveDirector;
+  readonly waves: Director;
   readonly grid: SpatialGrid<Enemy>;
 
   /** Simulation time of this run. */
@@ -82,11 +95,22 @@ export class World implements ProjectileHost {
   constructor(
     private readonly hooks: WorldHooks,
     readonly mode: GameMode = 'arcade',
+    /** Rogue Run only: the run this room belongs to. */
+    readonly run?: Run,
   ) {
-    this.waves = new WaveDirector(mode === 'zen');
+    this.arena = new Arena(this.viewWidth, run?.room.layout);
     const b = this.arena.bounds;
     this.grid = new SpatialGrid<Enemy>(b.x, b.y, b.w, b.h, C.spatialCell);
-    this.player = new Player(this.arena.centerX, this.arena.centerY + 120);
+    if (run) {
+      this.waves = new RoomDirector(run);
+      const at = entryPoint(run.room.entry, b);
+      this.player = new Player(at.x, at.y, new Arsenal({ infiniteAmmo: true, maxExtra: CONFIG.run.maxExtraWeapons }));
+      this.player.aimAngle = this.player.prevAimAngle = Math.atan2(this.arena.centerY - at.y, this.arena.centerX - at.x);
+      run.applyTo(this.player, this.score);
+    } else {
+      this.waves = new WaveDirector(mode === 'zen');
+      this.player = new Player(this.arena.centerX, this.arena.centerY + 120);
+    }
     this.eye = { x: this.arena.centerX, y: this.arena.centerY };
     this.camera.setup(this.arena, 0);
   }
@@ -281,11 +305,7 @@ export class World implements ProjectileHost {
   /** Create an enemy now, scaled to the current wave. `fx` adds a spawn flash. */
   spawnEnemy(kind: EnemyKind, x: number, y: number, fx = true): Enemy {
     const waves = this.waves;
-    let hpScale = waves.hpScale;
-    if (kind === 'boss') {
-      const bossNumber = Math.max(1, Math.round(waves.wave / CONFIG.waves.bossEvery));
-      hpScale = 1 + (bossNumber - 1) * CONFIG.enemies.boss.hpPerBoss;
-    }
+    const hpScale = kind === 'boss' ? waves.bossHpScale : waves.hpScale;
     const e = new Enemy(kind, x, y, hpScale, kind === 'boss' ? 1 : waves.speedScale);
     if (kind === 'boss') {
       e.boss = createBossState();
@@ -466,6 +486,14 @@ export class World implements ProjectileHost {
     this.hooks.waveStarted(wave, boss);
   }
 
+  onRoomExited(door: Door): void {
+    this.hooks.roomExited?.(door);
+  }
+
+  onRunWon(): void {
+    this.hooks.runWon?.();
+  }
+
   onWaveCleared(wave: number): void {
     this.sound('waveClear');
     const bonus = CONFIG.waves.clearBonusPerWave * wave;
@@ -548,6 +576,7 @@ export class World implements ProjectileHost {
     if (walls) renderArena(ctx, this.arena, this.time, walls);
     if (lit) this.renderFloorLighting(ctx, alpha);
     this.waves.renderMarkers(ctx, this.time);
+    this.waves.renderRoom?.(ctx, this);
     this.pickups.render(ctx);
     for (const e of this.enemies) {
       if (e.boss) renderBoss(ctx, e, alpha);
