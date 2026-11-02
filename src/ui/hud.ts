@@ -7,7 +7,7 @@ import type { Input } from '../input/input';
 import { WEAPONS } from '../weapons/definitions';
 import { TAU } from '../core/math';
 import { rewardInfo, type Pedestal } from '../entities/pedestal';
-import type { ModStacks } from '../run/mods';
+import { MOD_IDS, MODS, type ModStacks } from '../run/mods';
 import { RoomDirector } from '../world/roomDirector';
 import type { World } from '../world/world';
 import { renderPrompts, type PromptEntry } from './prompts';
@@ -43,6 +43,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
     glowText(ctx, formatTime(world.time), 96, 20, { size: 15, color: COLORS.white, blur: 4 });
   } else {
     renderHealth(ctx, world);
+    if (world.run) renderModChips(ctx, world.run.carry.mods);
   }
 
   renderScore(ctx, world);
@@ -56,6 +57,34 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
   if (input.device === 'touch') return;
   const prompts = input.device === 'gamepad' ? GAMEPLAY_PROMPTS_PAD : GAMEPLAY_PROMPTS_KB;
   renderPrompts(ctx, player.arsenal.slots.length > 1 ? [...prompts, SWAP_PROMPT] : prompts, input, W / 2, H - 20, 'center', 12, 0.75);
+}
+
+/** Rogue Run: a row of the mods you hold under the health pips, with stack counts. */
+function renderModChips(ctx: CanvasRenderingContext2D, mods: ModStacks): void {
+  let x = 48;
+  const y = 44;
+  ctx.save();
+  ctx.font = font(10);
+  ctx.textBaseline = 'middle';
+  for (const id of MOD_IDS) {
+    const n = mods[id] ?? 0;
+    if (n <= 0) continue;
+    const m = MODS[id];
+    const label = n > 1 ? `${m.short}×${n}` : m.short;
+    const w = ctx.measureText(label).width + 10;
+    ctx.fillStyle = 'rgba(8, 2, 22, 0.75)';
+    ctx.fillRect(x, y - 8, w, 16);
+    ctx.strokeStyle = m.color;
+    ctx.lineWidth = 1.2;
+    ctx.shadowColor = m.color;
+    ctx.shadowBlur = 6;
+    ctx.strokeRect(x, y - 8, w, 16);
+    ctx.shadowBlur = 0;
+    ctx.fillStyle = m.color;
+    ctx.fillText(label, x + 5, y + 1);
+    x += w + 6;
+  }
+  ctx.restore();
 }
 
 /** Rogue Run: name and description of the reward pedestal the player is standing near. */
