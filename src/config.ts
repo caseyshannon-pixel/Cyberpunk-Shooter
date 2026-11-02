@@ -1,3 +1,4 @@
+import type { ModDef } from './run/modTypes';
 import type { WeaponDef } from './weapons/types';
 
 const TAU = Math.PI * 2;
@@ -43,6 +44,22 @@ const WEAPON_DEFS = {
     projectileSpeed: 620, projectileRadius: 5, count: 18, arc: TAU, spread: 0, lifetime: 0.9,
   },
 } satisfies Record<string, WeaponDef>;
+
+/**
+ * Rogue Run mods: stackable upgrades taken from reward pedestals. Effects are
+ * per stack (see run/modTypes.ts); run/mods.ts folds them into RunStats.
+ */
+const MOD_DEFS = {
+  overvolt: { name: 'OVERVOLT', short: 'VOLT', blurb: '+25% damage', color: '#ff3355', max: 4, effect: { damage: 0.25 } },
+  rapid: { name: 'RAPID CYCLE', short: 'RPD', blurb: '+20% fire rate', color: '#ffe14d', max: 4, effect: { fireRate: 0.2 } },
+  split: { name: 'SPLIT SHOT', short: 'SPLT', blurb: '+1 projectile per shot', color: '#7dff4d', max: 3, effect: { projectiles: 1 } },
+  phase: { name: 'PHASE ROUNDS', short: 'PHS', blurb: 'Shots pierce +1 enemy', color: '#b18cff', max: 3, effect: { pierce: 1 } },
+  bounce: { name: 'BOUNCE CORE', short: 'BNC', blurb: 'Shots bounce off walls +1', color: '#ff9a1f', max: 3, effect: { bounces: 1 } },
+  heavy: { name: 'HEAVY CALIBER', short: 'HVY', blurb: '+30% shot size, +15% damage', color: '#ff2bd6', max: 2, effect: { size: 0.3, damage: 0.15 } },
+  blink: { name: 'BLINK DRIVE', short: 'BLNK', blurb: '−20% dash cooldown', color: '#00f0ff', max: 3, effect: { dashCooldown: 0.8 } },
+  hull: { name: 'REINFORCED HULL', short: 'HULL', blurb: '+1 max HP and heal 1', color: '#ff4d6d', max: 3, effect: { maxHealth: 1 } },
+  aegis: { name: 'AEGIS', short: 'AEG', blurb: 'Start each room with +1 shield hit', color: '#4d9dff', max: 2, effect: { shieldPerRoom: 1 } },
+} satisfies Record<string, ModDef>;
 
 /**
  * Every tunable number in the game lives here so balancing never requires
@@ -256,6 +273,8 @@ export const CONFIG = {
     rewardChoices: 3,
     /** Seconds to stand on a pedestal to take it. */
     takeTime: 0.5,
+    /** SPLIT SHOT: angle between the shots of a weapon that normally fires one (radians). */
+    splitSpacing: 0.14,
     /** Horizontal gap between reward pedestals (they sit in a row at the arena centre). */
     pedestalSpacing: 120,
     /** Multiplier on enemy buff-drop chances (weapons never drop in a run). */
@@ -296,6 +315,7 @@ export const CONFIG = {
   },
 
   weapons: WEAPON_DEFS,
+  mods: MOD_DEFS,
 
   pickups: {
     /** Seconds on the ground before vanishing. */
