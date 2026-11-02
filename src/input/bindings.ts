@@ -17,6 +17,9 @@ export const Action = {
   CONFIRM: 'CONFIRM',
   BACK: 'BACK',
   DEBUG: 'DEBUG',
+  /** Debug overlay on, Rogue Run: clear the room / skip to the floor boss (keyboard only, not listed). */
+  DEBUG_CLEAR: 'DEBUG_CLEAR',
+  DEBUG_BOSS: 'DEBUG_BOSS',
 } as const;
 export type Action = (typeof Action)[keyof typeof Action];
 export const ALL_ACTIONS = Object.values(Action) as Action[];
@@ -72,6 +75,8 @@ export const GAMEPAD_BINDINGS: Record<Action, readonly PadButton[]> = {
   CONFIRM: [PadButton.A],
   BACK: [PadButton.B],
   DEBUG: [PadButton.SELECT],
+  DEBUG_CLEAR: [],
+  DEBUG_BOSS: [],
 };
 
 /** Keyboard bindings use `KeyboardEvent.code` (layout-independent physical keys). */
@@ -88,6 +93,8 @@ export const KEYBOARD_BINDINGS: Record<Action, readonly string[]> = {
   CONFIRM: ['Enter', 'Space'],
   BACK: ['Escape', 'Backspace'],
   DEBUG: ['Backquote', 'F3'],
+  DEBUG_CLEAR: ['KeyK'],
+  DEBUG_BOSS: ['KeyB'],
 };
 
 /** Mouse buttons by `MouseEvent.button` (0 = left, 1 = middle, 2 = right). */

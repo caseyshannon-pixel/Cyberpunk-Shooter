@@ -5,6 +5,7 @@ import { renderCrosshair, renderDashRing, renderHud, renderPadReticle, renderWav
 import type { Door } from '../entities/door';
 import { Run, type RunOutcome } from '../run/run';
 import { renderTouchHud } from '../ui/touchHud';
+import { RoomDirector } from '../world/roomDirector';
 import { World, type GameMode } from '../world/world';
 import { GameOverState } from './gameover';
 import { PauseState } from './pause';
@@ -80,6 +81,8 @@ export class PlayState implements GameState {
       return;
     }
 
+    if (this.run && this.game.debug) this.debugKeys(this.run);
+
     const w = this.world;
     // Hit-stop: hold the frame for a moment on big impacts.
     if (w.freeze > 0) {
@@ -106,6 +109,17 @@ export class PlayState implements GameState {
         this.gameOverShown = true;
         this.game.push(new GameOverState(this.game, this));
       }
+    }
+  }
+
+  /** Debug overlay on: K clears the room, B skips to this floor's boss. */
+  private debugKeys(run: Run): void {
+    const input = this.game.input;
+    if (input.pressed(Action.DEBUG_CLEAR) && this.world.waves instanceof RoomDirector) this.world.waves.debugClear(this.world);
+    if (input.pressed(Action.DEBUG_BOSS) && !run.isBossRoom && !this.game.transitioning) {
+      run.captureFrom(this.world.player, this.world.score);
+      run.debugSkipToBoss();
+      this.game.transition(() => new PlayState(this.game, 'run', run));
     }
   }
 

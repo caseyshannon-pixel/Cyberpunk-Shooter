@@ -15,6 +15,7 @@ import { Menu } from '../ui/menu';
 import { font, glowText } from '../ui/text';
 import { Arena } from '../world/arena';
 import { ControlsState } from './controls';
+import { Run } from '../run/run';
 import { PlayState } from './play';
 import { SettingsState } from './settings';
 import type { GameState } from './state';
@@ -48,6 +49,11 @@ export class TitleState implements GameState {
           label: 'START',
           hint: 'Waves, bosses and 5 hits — chase the high score.',
           run: () => game.transition(() => new PlayState(game, 'arcade')),
+        },
+        {
+          label: 'ROGUE RUN',
+          hint: 'Room by room, 3 floors. Build your loadout — one life.',
+          run: () => game.transition(() => new PlayState(game, 'run', new Run(game.display.preferredWidth()))),
         },
         {
           label: 'ZEN MODE',

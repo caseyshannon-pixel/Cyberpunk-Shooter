@@ -104,6 +104,15 @@ describe('Run', () => {
     expect(s2.kills).toBe(2);
   });
 
+  it('debugSkipToBoss jumps to the current floor boss room', () => {
+    const run = new Run(1280, 1);
+    run.advance(run.exits()[0], 'left');
+    run.debugSkipToBoss();
+    expect(run.room).toMatchObject({ floor: 1, room: R.roomsPerFloor + 1, type: 'boss', reward: 'none', layout: 'open' });
+    expect(run.isBossRoom).toBe(true);
+    expect(run.isFinalBoss).toBe(false);
+  });
+
   it('finish records the outcome; onRoomCleared counts rooms', () => {
     const run = new Run(1280, 1);
     run.onRoomCleared();

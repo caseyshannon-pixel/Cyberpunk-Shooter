@@ -88,6 +88,11 @@ export class Run {
     score.kills = this.kills;
   }
 
+  /** Debug: jump straight to this floor's boss room. */
+  debugSkipToBoss(): void {
+    this.room = { ...this.room, room: R.roomsPerFloor + 1, type: 'boss', reward: 'none', layout: 'open', entry: 'bottom' };
+  }
+
   onRoomCleared(): void {
     this.roomsCleared++;
   }
