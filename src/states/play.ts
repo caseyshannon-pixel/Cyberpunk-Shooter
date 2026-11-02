@@ -2,10 +2,13 @@ import { CONFIG } from '../config';
 import type { Game } from '../game';
 import { Action } from '../input/bindings';
 import { renderCrosshair, renderDashRing, renderHud, renderPadReticle, renderWaveBanner } from '../ui/hud';
+import type { Door } from '../entities/door';
+import { Run, type RunOutcome } from '../run/run';
 import { renderTouchHud } from '../ui/touchHud';
 import { World, type GameMode } from '../world/world';
 import { GameOverState } from './gameover';
 import { PauseState } from './pause';
+import { RunOverState } from './runOver';
 import type { GameState } from './state';
 
 /** The core gameplay state: owns the World for one run. */
@@ -14,16 +17,22 @@ export class PlayState implements GameState {
   readonly touchControls = true;
   world!: World;
   private gameOverShown = false;
+  /** Rogue Run: seconds until the victory screen after the final boss falls (0 = not won). */
+  private winTimer = 0;
   private readonly unsubscribeResize: () => void;
 
   constructor(
     private readonly game: Game,
     readonly mode: GameMode = 'arcade',
+    /** Rogue Run only: the run this room belongs to. */
+    readonly run?: Run,
   ) {
     this.reset();
     // If the screen changes shape before the first wave starts (e.g. the page
     // loaded in portrait and the phone was then rotated), re-fit the arena.
+    // A run keeps the width it started with for every room.
     this.unsubscribeResize = game.display.onResize(() => {
+      if (this.run) return;
       const w = this.world;
       const fresh = w.score.kills === 0 && (w.zen ? w.time < 3 : w.waves.wave === 0);
       if (fresh && game.display.preferredWidth() !== w.viewWidth) this.reset();
@@ -37,7 +46,7 @@ export class PlayState implements GameState {
 
   /** Start a fresh run. The view width is locked here so the arena never changes shape mid-run. */
   reset(): void {
-    this.game.display.setLogicalWidth(this.game.display.preferredWidth());
+    this.game.display.setLogicalWidth(this.run ? this.run.viewWidth : this.game.display.preferredWidth());
     const audio = this.game.audio;
     const zen = this.mode === 'zen';
     this.world = new World(
@@ -46,12 +55,16 @@ export class PlayState implements GameState {
         rumble: (s, w, ms) => this.game.input.rumble(s, w, ms),
         sound: (name, x) => audio.sfx.play(name, x),
         waveStarted: (_wave, boss) => audio.music.setIntensity(boss ? 2 : 1),
+        roomExited: (door) => this.leaveRoom(door),
+        runWon: () => (this.winTimer = CONFIG.run.victoryDelay),
       },
       this.mode,
+      this.run,
     );
     // Mouse aim targets the floor point under the pointer, whatever the camera.
     this.game.input.pointerToWorld = this.world.screenToFloor;
     this.gameOverShown = false;
+    this.winTimer = 0;
     // Zen keeps the soundtrack calm: pads and bass, no drums.
     audio.music.setIntensity(zen ? 0 : 1);
     audio.music.start();
@@ -81,10 +94,39 @@ export class PlayState implements GameState {
     }
     w.update(dt * scale, input);
 
-    if (!this.world.player.alive && !this.gameOverShown && this.world.deathTime >= CONFIG.player.deathDelay) {
-      this.gameOverShown = true;
-      this.game.push(new GameOverState(this.game, this));
+    if (this.winTimer > 0) {
+      this.winTimer -= dt;
+      if (this.winTimer <= 0) this.endRun('victory');
     }
+
+    if (!this.world.player.alive && !this.gameOverShown && this.world.deathTime >= CONFIG.player.deathDelay) {
+      if (this.run) {
+        this.endRun('dead');
+      } else {
+        this.gameOverShown = true;
+        this.game.push(new GameOverState(this.game, this));
+      }
+    }
+  }
+
+  /** Rogue Run: carry the player through the door into the next room. */
+  private leaveRoom(door: Door): void {
+    const run = this.run;
+    if (!run || this.game.transitioning) return;
+    run.captureFrom(this.world.player, this.world.score);
+    run.advance(door.option, door.side);
+    this.game.audio.sfx.play('swap');
+    this.game.transition(() => new PlayState(this.game, 'run', run));
+  }
+
+  /** Rogue Run: the run is over (death, victory or abandoned) — show the summary. */
+  endRun(outcome: Exclude<RunOutcome, 'active'>): void {
+    const run = this.run;
+    if (!run || this.gameOverShown) return;
+    this.gameOverShown = true;
+    run.captureFrom(this.world.player, this.world.score);
+    run.finish(outcome);
+    this.game.push(new RunOverState(this.game, run));
   }
 
   /** Zen: finish the session and show its summary (there's no death to end it). */

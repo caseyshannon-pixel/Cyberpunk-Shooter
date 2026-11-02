@@ -6,6 +6,8 @@ import { Action, Axis } from '../input/bindings';
 import type { Input } from '../input/input';
 import { WEAPONS } from '../weapons/definitions';
 import { TAU } from '../core/math';
+import type { Pedestal } from '../entities/pedestal';
+import { RoomDirector } from '../world/roomDirector';
 import type { World } from '../world/world';
 import { renderPrompts, type PromptEntry } from './prompts';
 import { font, formatTime, glowText } from './text';
@@ -44,6 +46,7 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
 
   renderScore(ctx, world);
   renderBossBar(ctx, world);
+  if (world.waves instanceof RoomDirector) renderPedestalInfo(ctx, world.waves.nearPedestal(world));
 
   const weaponLeft = renderWeapon(ctx, player);
   renderBuffs(ctx, player, weaponLeft - 26);
@@ -52,6 +55,15 @@ export function renderHud(ctx: CanvasRenderingContext2D, world: World, input: In
   if (input.device === 'touch') return;
   const prompts = input.device === 'gamepad' ? GAMEPLAY_PROMPTS_PAD : GAMEPLAY_PROMPTS_KB;
   renderPrompts(ctx, player.arsenal.slots.length > 1 ? [...prompts, SWAP_PROMPT] : prompts, input, W / 2, H - 20, 'center', 12, 0.75);
+}
+
+/** Rogue Run: name and description of the reward pedestal the player is standing near. */
+function renderPedestalInfo(ctx: CanvasRenderingContext2D, ped: Pedestal | null): void {
+  if (!ped) return;
+  const def = WEAPONS[ped.weapon];
+  const y = VIEW.height - 84;
+  glowText(ctx, def.name, VIEW.width / 2, y, { size: 20, color: def.color, align: 'center', blur: 12 });
+  if (def.blurb) glowText(ctx, def.blurb, VIEW.width / 2, y + 24, { size: 14, color: COLORS.white, align: 'center', blur: 4 });
 }
 
 /** Health pips + wave number (top-left). */

@@ -37,13 +37,22 @@ export class PauseState implements GameState {
                 this.play.endSession();
               },
             }
-          : {
-              label: 'RESTART',
-              run: () => {
-                this.play.reset();
-                this.resume();
+          : play.run
+            ? {
+                // A run can't restart mid-way; giving up ends it (and shows the summary).
+                label: 'ABANDON RUN',
+                run: () => {
+                  game.pop();
+                  this.play.endRun('abandoned');
+                },
+              }
+            : {
+                label: 'RESTART',
+                run: () => {
+                  this.play.reset();
+                  this.resume();
+                },
               },
-            },
         { label: 'QUIT TO TITLE', run: () => game.transition(() => new TitleState(game)) },
       ],
       { y: VIEW.height / 2 - 30, spacing: 44 },
@@ -82,7 +91,7 @@ export class PauseState implements GameState {
     ctx.fillRect(0, 0, W, H);
     ctx.restore();
 
-    glowText(ctx, this.play.world.zen ? 'ZEN · PAUSED' : 'PAUSED', W / 2, H / 2 - 150, { size: 56, color: COLORS.white, glow: COLORS.magenta, blur: 24, align: 'center', alpha: fade });
+    glowText(ctx, this.play.world.zen ? 'ZEN · PAUSED' : this.play.run ? 'RUN · PAUSED' : 'PAUSED', W / 2, H / 2 - 150, { size: 56, color: COLORS.white, glow: COLORS.magenta, blur: 24, align: 'center', alpha: fade });
     if (this.reason) {
       const blink = 0.6 + Math.sin(this.age * 5) * 0.4;
       glowText(ctx, this.reason, W / 2, H / 2 - 100, { size: 16, color: COLORS.magenta, align: 'center', alpha: fade * blink });

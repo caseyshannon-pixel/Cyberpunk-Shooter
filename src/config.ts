@@ -264,6 +264,8 @@ export const CONFIG = {
     door: { width: 120, depth: 18, clearDepth: 130 },
     /** How far inside the wall the player appears when entering a room. */
     entryInset: 60,
+    /** Seconds between the final boss falling and the victory screen. */
+    victoryDelay: 2,
   },
 
   score: {

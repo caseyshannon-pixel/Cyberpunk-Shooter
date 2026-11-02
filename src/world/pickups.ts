@@ -14,21 +14,27 @@ export class PickupManager {
 
   /** Roll an enemy's drop chance (bosses always drop several). */
   onEnemyKilled(e: Enemy, w: World): void {
+    const run = w.mode === 'run';
     if (e.boss && !w.zen) {
       this.spawn('health', e.x, e.y, w);
-      for (let i = 0; i < PK.bossDrops; i++) this.spawn(this.roll(w), e.x, e.y, w);
+      // Rogue Run rewards come from pedestals, not boss loot.
+      if (!run) for (let i = 0; i < PK.bossDrops; i++) this.spawn(this.roll(w), e.x, e.y, w);
       return;
     }
     if (this.items.length >= PK.maxOnField) return;
-    const chance = e.def.dropChance * (w.zen ? CONFIG.zen.dropBoost : 1);
+    const chance = e.def.dropChance * (w.zen ? CONFIG.zen.dropBoost : run ? CONFIG.run.buffDropScale : 1);
     if (Math.random() < chance) this.spawn(this.roll(w), e.x, e.y, w);
   }
 
   /** Weighted-random pickup kind (health chips get rare while at full health). */
   roll(w: World): PickupKind {
     const fullHp = w.player.health >= w.player.maxHealth;
-    // Zen drops nothing that only matters when you can be hurt.
-    const kinds = w.zen ? KINDS.filter((k) => !(CONFIG.zen.excludedPickups as readonly string[]).includes(k)) : KINDS;
+    // Zen drops nothing that only matters when you can be hurt; Rogue Run weapons come from pedestals.
+    const kinds = w.zen
+      ? KINDS.filter((k) => !(CONFIG.zen.excludedPickups as readonly string[]).includes(k))
+      : w.mode === 'run'
+        ? KINDS.filter((k) => !isWeaponPickup(k))
+        : KINDS;
     let total = 0;
     for (const k of kinds) total += this.weight(k, fullHp);
     let r = Math.random() * total;
