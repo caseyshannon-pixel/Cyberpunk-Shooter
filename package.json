@@ -9,11 +9,13 @@
     "dev:lan": "vite --mode lan",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc"
+    "typecheck": "tsc",
+    "test": "vitest run"
   },
   "devDependencies": {
     "@vitejs/plugin-basic-ssl": "^2.3.0",
     "typescript": "~5.9.3",
-    "vite": "^8.3.4"
+    "vite": "^8.3.4",
+    "vitest": "^5.1.0"
   }
 }
