@@ -14,9 +14,25 @@ export interface WeaponSlot {
  * Pistol; picking up a weapon adds a slot (or tops it up) and equips it, and a
  * weapon that runs dry is dropped, falling back to the Pulse Pistol.
  */
+export interface ArsenalOptions {
+  /** Rogue Run: weapons never run dry. */
+  infiniteAmmo?: boolean;
+  /** Most weapons carried besides the Pulse Pistol. */
+  maxExtra?: number;
+}
+
 export class Arsenal {
   readonly slots: WeaponSlot[] = [{ id: DEFAULT_WEAPON, ammo: Infinity, capacity: Infinity }];
   index = 0;
+  private readonly infiniteAmmo: boolean;
+  private readonly maxExtra: number;
+  /** Slot of the weapon added last (replaced first when full and the Pistol is equipped). */
+  private lastAdded = 0;
+
+  constructor(opts: ArsenalOptions = {}) {
+    this.infiniteAmmo = opts.infiniteAmmo ?? false;
+    this.maxExtra = opts.maxExtra ?? Infinity;
+  }
 
   get current(): WeaponSlot {
     return this.slots[this.index];
@@ -26,19 +42,38 @@ export class Arsenal {
     return WEAPONS[this.current.id];
   }
 
-  /** Add (or refill) a weapon and equip it. */
+  /**
+   * Add (or refill) a weapon and equip it. When the extra slots are full the
+   * equipped weapon is replaced — or, with the Pistol equipped, the newest one.
+   */
   add(id: WeaponId): void {
-    const per = WEAPONS[id].ammo ?? Infinity;
+    const per = this.infiniteAmmo ? Infinity : (WEAPONS[id].ammo ?? Infinity);
     const i = this.slots.findIndex((s) => s.id === id);
     if (i >= 0) {
       const slot = this.slots[i];
       slot.ammo = Math.min(per * CONFIG.buffs.weaponAmmoCap, slot.ammo + per);
       slot.capacity = Math.max(slot.capacity, slot.ammo);
       this.index = i;
+    } else if (this.slots.length - 1 >= this.maxExtra) {
+      const at = this.index > 0 ? this.index : this.lastAdded;
+      this.slots[at] = { id, ammo: per, capacity: per };
+      this.index = this.lastAdded = at;
     } else {
       this.slots.push({ id, ammo: per, capacity: per });
-      this.index = this.slots.length - 1;
+      this.index = this.lastAdded = this.slots.length - 1;
     }
+  }
+
+  /** Carried weapon ids, Pistol first. */
+  ids(): WeaponId[] {
+    return this.slots.map((s) => s.id);
+  }
+
+  /** Re-equip a loadout saved with `ids()` (the Pistol entry is implied). */
+  restore(ids: readonly WeaponId[], index: number): void {
+    this.slots.length = 1;
+    for (const id of ids) if (id !== DEFAULT_WEAPON) this.add(id);
+    this.index = Math.min(Math.max(0, index), this.slots.length - 1);
   }
 
   /** Cycle held weapons; returns true if the equipped weapon changed. */

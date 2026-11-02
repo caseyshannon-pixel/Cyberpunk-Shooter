@@ -42,7 +42,7 @@ export class Player {
   justDashed = false;
 
   /** Carried weapons + ammo (fired by weapons/weaponSystem.ts). */
-  readonly arsenal = new Arsenal();
+  readonly arsenal: Arsenal;
   fireCooldown = 0;
   /** Seconds since last shot; drives muzzle flash. */
   sinceShot = 1;
@@ -58,7 +58,8 @@ export class Player {
 
   private readonly aimDir: Vec2 = vec();
 
-  constructor(x: number, y: number) {
+  constructor(x: number, y: number, arsenal = new Arsenal()) {
+    this.arsenal = arsenal;
     this.x = this.prevX = x;
     this.y = this.prevY = y;
   }
