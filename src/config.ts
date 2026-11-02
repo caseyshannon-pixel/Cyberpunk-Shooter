@@ -220,6 +220,52 @@ export const CONFIG = {
     storageKey: 'neongrid.zenbest',
   },
 
+  /** Rogue Run: room-to-room runs over several floors (see src/run/). */
+  run: {
+    floors: 3,
+    /** Rooms before each floor's boss room. */
+    roomsPerFloor: 6,
+    /** [min, max] waves in a combat room, per floor. */
+    wavesPerRoom: [[1, 2], [2, 2], [2, 3]],
+    /** Wave budget = base + floor × perFloor + room × perRoom. */
+    budgetBase: 6,
+    budgetPerFloor: 4,
+    budgetPerRoom: 1.5,
+    /** Enemy HP scale = 1 + (floor − 1) × hpPerFloor + room × hpPerRoom. */
+    hpPerFloor: 0.35,
+    hpPerRoom: 0.04,
+    speedPerFloor: 0.05,
+    /** Enemy kinds each floor's waves are drawn from. */
+    floorPools: [
+      ['drone', 'gunner', 'splitter'],
+      ['drone', 'gunner', 'splitter', 'bruiser'],
+      ['drone', 'gunner', 'splitter', 'bruiser'],
+    ],
+    /** Floor boss HP, per floor. */
+    bossHp: [280, 280, 280],
+    /** HP restored after beating a floor boss. */
+    bossHeal: 2,
+    /** Pause between waves in a room. */
+    waveBreather: 1.2,
+    /** Room banner time before the first wave spawns. */
+    introTime: 1.6,
+    /** Chance a cleared room offers a third door. */
+    extraDoorChance: 0.3,
+    /** Weapons carried besides the Pulse Pistol. */
+    maxExtraWeapons: 2,
+    rewardChoices: 3,
+    /** Seconds to stand on a pedestal to take it. */
+    takeTime: 0.5,
+    /** Horizontal gap between reward pedestals (they sit in a row at the arena centre). */
+    pedestalSpacing: 120,
+    /** Multiplier on enemy buff-drop chances (weapons never drop in a run). */
+    buffDropScale: 0.5,
+    /** Door gates: size along the wall, depth into the arena, and the space kept clear in front. */
+    door: { width: 120, depth: 18, clearDepth: 130 },
+    /** How far inside the wall the player appears when entering a room. */
+    entryInset: 60,
+  },
+
   score: {
     /** Kills needed to raise the multiplier by one. */
     killsPerLevel: 5,

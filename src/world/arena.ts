@@ -1,6 +1,7 @@
 import { CONFIG } from '../config';
 import { circleRect, segmentRect, type Contact, type Rect } from '../core/collision';
 import { VIEW } from '../core/view';
+import { LAYOUTS, type LayoutId } from '../run/rooms';
 
 export interface Obstacle extends Rect {
   kind: 'pillar' | 'crate';
@@ -18,33 +19,20 @@ export class Arena {
   private readonly contact: Contact = { nx: 0, ny: 0, depth: 0 };
 
   /** `viewWidth` is the logical view width this run uses; the arena fills it minus margins. */
-  constructor(viewWidth: number = VIEW.width) {
+  constructor(viewWidth: number = VIEW.width, layout: LayoutId = 'classic') {
     this.bounds = { x: A.x, y: A.y, w: viewWidth - A.x * 2, h: A.height };
-    this.buildLayout();
+    this.buildLayout(layout);
   }
 
-  private buildLayout(): void {
+  private buildLayout(layout: LayoutId): void {
     const b = this.bounds;
     const cx = b.x + b.w / 2;
     const cy = b.y + b.h / 2;
     // Horizontal offsets scale with the arena so wide screens get a wider layout, not a cramped centre.
     const sx = b.w / A.width;
-    const add = (x: number, y: number, w: number, h: number, kind: Obstacle['kind']) =>
-      this.obstacles.push({ x: x - w / 2, y: y - h / 2, w, h, kind });
-
-    // Four pillars around the centre.
-    const px = 260 * sx;
-    const py = 150;
-    add(cx - px, cy - py, 56, 56, 'pillar');
-    add(cx + px, cy - py, 56, 56, 'pillar');
-    add(cx - px, cy + py, 56, 56, 'pillar');
-    add(cx + px, cy + py, 56, 56, 'pillar');
-
-    // Crate walls near the flanks for cover.
-    add(cx - 470 * sx, cy, 40, 140, 'crate');
-    add(cx + 470 * sx, cy, 40, 140, 'crate');
-    add(cx, cy - 235, 150, 36, 'crate');
-    add(cx, cy + 235, 150, 36, 'crate');
+    for (const o of LAYOUTS[layout]) {
+      this.obstacles.push({ x: cx + o.dx * sx - o.w / 2, y: cy + o.dy - o.h / 2, w: o.w, h: o.h, kind: o.kind });
+    }
   }
 
   get centerX(): number {
