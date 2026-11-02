@@ -54,4 +54,9 @@ describe('applyStats', () => {
     expect(applyStats(WEAPONS.pulse, s).projectileRadius).toBeCloseTo(4 * 1.3);
     expect(applyStats(WEAPONS.rail, s).beamWidth).toBeCloseTo(12 * 1.3);
   });
+
+  it('fire rate also shortens the rail charge-up', () => {
+    const d = applyStats(WEAPONS.rail, stats({ fireRateMult: 1.8 }));
+    expect(d.chargeTime).toBeCloseTo(0.42 / 1.8);
+  });
 });

@@ -280,11 +280,11 @@ export class World implements ProjectileHost {
     this.particles.burst(b.x, b.y, b.color, 3, 40, 160, 0.1, 0.22, 1.5, Math.atan2(c.ny, c.nx), 2.2);
   }
 
-  nearestEnemy(x: number, y: number, maxDist: number): HomingTarget | null {
+  nearestEnemy(x: number, y: number, maxDist: number, exclude?: readonly unknown[]): HomingTarget | null {
     let best: Enemy | null = null;
     let bd = maxDist * maxDist;
     for (const e of this.enemies) {
-      if (e.dead) continue;
+      if (e.dead || exclude?.includes(e)) continue;
       const d2 = (e.x - x) ** 2 + (e.y - y) ** 2;
       if (d2 < bd) {
         bd = d2;

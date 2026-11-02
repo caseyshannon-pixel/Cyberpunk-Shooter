@@ -20,7 +20,8 @@ export interface ProjectileHost {
   projectileHit(b: Projectile): boolean;
   /** Called on wall impact (both for bounces and for the final hit). */
   projectileWall(b: Projectile, contact: Contact): void;
-  nearestEnemy(x: number, y: number, maxDist: number): HomingTarget | null;
+  /** Closest live enemy within `maxDist`, skipping any in `exclude` (enemies a piercing shot already hit). */
+  nearestEnemy(x: number, y: number, maxDist: number, exclude?: readonly unknown[]): HomingTarget | null;
 }
 
 export type Team = 'player' | 'enemy';
@@ -145,8 +146,9 @@ export class Projectiles {
 
 function steerHoming(b: Projectile, host: ProjectileHost, dt: number): void {
   b.retarget -= dt;
-  if (!b.target || b.target.dead || b.retarget <= 0) {
-    b.target = host.nearestEnemy(b.x, b.y, HOMING_RANGE);
+  // A piercing missile moves on from whatever it has already hit instead of circling it.
+  if (!b.target || b.target.dead || b.retarget <= 0 || b.hits.includes(b.target)) {
+    b.target = host.nearestEnemy(b.x, b.y, HOMING_RANGE, b.hits);
     b.retarget = 0.25;
   }
   const t = b.target;

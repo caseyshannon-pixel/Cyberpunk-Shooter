@@ -10,7 +10,8 @@ import type { WeaponDef } from './types';
 export function applyStats(def: WeaponDef, s: RunStats): WeaponDef {
   if (s === NEUTRAL_STATS) return def;
   const out: WeaponDef = { ...def, damage: def.damage * s.damageMult, fireRate: def.fireRate * s.fireRateMult };
-  if (def.mode === 'rail') return { ...out, beamWidth: (def.beamWidth ?? 10) * s.sizeMult };
+  // The rail's charge-up is part of its fire cycle, so fire rate shortens it too.
+  if (def.mode === 'rail') return { ...out, beamWidth: (def.beamWidth ?? 10) * s.sizeMult, chargeTime: (def.chargeTime ?? 0.4) / s.fireRateMult };
   if (def.mode !== 'projectile') return out;
 
   const base = def.count ?? 1;
