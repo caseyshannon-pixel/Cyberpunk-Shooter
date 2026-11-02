@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { CONFIG } from '../config';
 import type { Door } from '../entities/door';
 import { Run } from '../run/run';
 import { RoomDirector } from './roomDirector';
@@ -85,16 +86,59 @@ describe('RoomDirector', () => {
     expect(calls.exited).toEqual([]);
   });
 
-  it('finalBossWins: clearing the last boss wins the run and opens no doors', () => {
-    const run = new Run(1280, 6);
+  function finalBoss(seed: number) {
+    const run = new Run(1280, seed);
     while (!run.isFinalBoss) run.advance(run.exits()[0], 'top');
-    const { w, d, calls } = setup(run);
+    return setup(run);
+  }
+
+  it('finalBossWins: clearing the last boss wins the run after the victory delay, with no doors', () => {
+    const { w, d, calls } = finalBoss(6);
     expect(d.isBossWave).toBe(true);
     expect(d.label).toBe('F3 · BOSS');
     clearRoom(w, d);
+    expect(calls.won).toBe(0);
+    for (let i = 0; i < 60 * (CONFIG.run.victoryDelay + 0.1); i++) d.update(DT, w);
     expect(calls.won).toBe(1);
     expect(d.doors).toHaveLength(0);
     expect(d.pedestals).toHaveLength(0);
+  });
+
+  it('a dead player never wins, even if the last boss falls after they died', () => {
+    const { w, d, calls } = finalBoss(7);
+    w.player.alive = false;
+    clearRoom(w, d);
+    for (let i = 0; i < 60 * 5; i++) d.update(DT, w);
+    expect(calls.won).toBe(0);
+  });
+
+  it('dying during the victory delay cancels the win', () => {
+    const { w, d, calls } = finalBoss(9);
+    clearRoom(w, d);
+    d.update(DT, w);
+    w.player.alive = false;
+    for (let i = 0; i < 60 * 5; i++) d.update(DT, w);
+    expect(calls.won).toBe(0);
+  });
+
+  it('the banner names the wave that is about to start', () => {
+    const run = new Run(1280, 10);
+    run.advance(run.exits()[0], 'top'); // floor rooms always have waves; floor 2 has exactly 2
+    while (run.room.floor < 2) run.advance(run.exits()[0], 'top');
+    const { w, d } = setup(run);
+    const started: number[] = [];
+    const seen: string[] = [];
+    for (let i = 0; i < 60 * 60 && d.stage === 'fighting'; i++) {
+      d.update(DT, w);
+      if (d.phase === 'intro' && !seen.includes(d.bannerText)) {
+        seen.push(d.bannerText);
+        started.push(d.wave);
+      }
+      for (const e of [...w.enemies]) w.damageEnemy(e, 9999, 1, 0);
+      w.enemies.length = 0; // World.update compacts out the dead; the director alone doesn't
+    }
+    expect(seen).toEqual(['FLOOR 2 · ROOM 1', 'WAVE 2/2']);
+    expect(started).toEqual([1, 2]);
   });
 
   it('a floor boss room spawns the Warden with the floor HP', () => {

@@ -18,8 +18,6 @@ export class PlayState implements GameState {
   readonly touchControls = true;
   world!: World;
   private gameOverShown = false;
-  /** Rogue Run: seconds until the victory screen after the final boss falls (0 = not won). */
-  private winTimer = 0;
   private readonly unsubscribeResize: () => void;
 
   constructor(
@@ -57,7 +55,7 @@ export class PlayState implements GameState {
         sound: (name, x) => audio.sfx.play(name, x),
         waveStarted: (_wave, boss) => audio.music.setIntensity(boss ? 2 : 1),
         roomExited: (door) => this.leaveRoom(door),
-        runWon: () => (this.winTimer = CONFIG.run.victoryDelay),
+        runWon: () => this.endRun('victory'),
       },
       this.mode,
       this.run,
@@ -65,7 +63,6 @@ export class PlayState implements GameState {
     // Mouse aim targets the floor point under the pointer, whatever the camera.
     this.game.input.pointerToWorld = this.world.screenToFloor;
     this.gameOverShown = false;
-    this.winTimer = 0;
     // Zen keeps the soundtrack calm: pads and bass, no drums.
     audio.music.setIntensity(zen ? 0 : 1);
     audio.music.start();
@@ -96,11 +93,6 @@ export class PlayState implements GameState {
       if (w.slowMo <= 0) w.slowMoScale = 1;
     }
     w.update(dt * scale, input);
-
-    if (this.winTimer > 0) {
-      this.winTimer -= dt;
-      if (this.winTimer <= 0) this.endRun('victory');
-    }
 
     if (!this.world.player.alive && !this.gameOverShown && this.world.deathTime >= CONFIG.player.deathDelay) {
       if (this.run) {

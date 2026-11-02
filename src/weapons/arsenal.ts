@@ -64,16 +64,23 @@ export class Arsenal {
     }
   }
 
+  /** Slot of the newest weapon (carried between rooms so the replacement rule holds). */
+  get newest(): number {
+    return this.lastAdded;
+  }
+
   /** Carried weapon ids, Pistol first. */
   ids(): WeaponId[] {
     return this.slots.map((s) => s.id);
   }
 
-  /** Re-equip a loadout saved with `ids()` (the Pistol entry is implied). */
-  restore(ids: readonly WeaponId[], index: number): void {
+  /** Re-equip a loadout saved with `ids()`, `index` and `newest` (the Pistol entry is implied). */
+  restore(ids: readonly WeaponId[], index: number, newest = ids.length - 1): void {
     this.slots.length = 1;
     for (const id of ids) if (id !== DEFAULT_WEAPON) this.add(id);
-    this.index = Math.min(Math.max(0, index), this.slots.length - 1);
+    const clamp = (i: number) => Math.min(Math.max(0, i), this.slots.length - 1);
+    this.index = clamp(index);
+    this.lastAdded = clamp(newest);
   }
 
   /** Cycle held weapons; returns true if the equipped weapon changed. */

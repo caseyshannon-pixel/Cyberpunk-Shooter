@@ -24,8 +24,9 @@ export type RoomStage = 'fighting' | 'reward' | 'leaving';
  */
 export class RoomDirector implements Director {
   wave = 0;
-  phase: WavePhase = 'intro';
-  timer: number = R.introTime;
+  /** Starts 'cleared' with no wave yet, like Arcade: the first wave (and its banner) begins at once. */
+  phase: WavePhase = 'cleared';
+  timer = 0;
   phaseAge = 0;
   stage: RoomStage = 'fighting';
   readonly isBossWave: boolean;
@@ -39,6 +40,8 @@ export class RoomDirector implements Director {
   private queue: EnemyKind[] = [];
   private spawnTimer = 0;
   private roomDone = false;
+  /** Final boss down: seconds until the run is won (cancelled if the player dies first). */
+  private winTimer = 0;
   private readonly pt = vec();
 
   constructor(private readonly run: Run) {
@@ -82,9 +85,13 @@ export class RoomDirector implements Director {
 
   private updateFighting(dt: number, w: World): void {
     switch (this.phase) {
-      case 'intro':
+      case 'cleared':
         this.timer -= dt;
         if (this.timer <= 0) this.startWave(w);
+        break;
+      case 'intro':
+        this.timer -= dt;
+        if (this.timer <= 0) this.setPhase('active', 0);
         break;
       case 'active':
         this.spawnTimer -= dt;
@@ -95,18 +102,15 @@ export class RoomDirector implements Director {
         }
         if (!this.queue.length && !this.markers.length && !w.enemies.length) this.waveCleared(w);
         break;
-      case 'cleared':
-        this.timer -= dt;
-        if (this.timer <= 0) this.setPhase('intro', R.introTime);
-        break;
     }
   }
 
+  /** Announce the next wave (banner, alarm, music); it spawns when the intro ends. */
   private startWave(w: World): void {
     this.wave++;
     this.queue = this.buildQueue();
     this.spawnTimer = 0;
-    this.setPhase('active', 0);
+    this.setPhase('intro', R.introTime);
     w.onWaveStarted(this.wave, this.isBossWave);
   }
 
@@ -142,7 +146,8 @@ export class RoomDirector implements Director {
     w.sound('waveClear');
     this.stage = 'reward';
     if (this.run.isFinalBoss) {
-      w.onRunWon();
+      // A corpse can't win: a boss killed by bullets still in flight after death doesn't count.
+      if (w.player.alive) this.winTimer = R.victoryDelay;
       return;
     }
     if (this.run.room.reward === 'weapon') {
@@ -162,7 +167,15 @@ export class RoomDirector implements Director {
   private updateReward(dt: number, w: World): void {
     const p = w.player;
     for (const d of this.doors) d.open = Math.min(1, d.open + dt * 2.5);
-    if (!p.alive) return;
+    if (!p.alive) {
+      this.winTimer = 0;
+      return;
+    }
+    if (this.winTimer > 0) {
+      this.winTimer -= dt;
+      if (this.winTimer <= 0) w.onRunWon();
+      return;
+    }
     for (const ped of this.pedestals) {
       if (!ped.update(dt, p.x, p.y, p.radius)) continue;
       this.take(ped, w);

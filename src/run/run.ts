@@ -14,6 +14,8 @@ export interface Carry {
   maxHealth: number;
   weapons: WeaponId[];
   equipped: number;
+  /** Slot of the weapon taken last (replaced first when the Pistol is equipped). */
+  newest: number;
 }
 
 export type RunOutcome = 'active' | 'dead' | 'victory' | 'abandoned';
@@ -25,7 +27,7 @@ export type RunOutcome = 'active' | 'dead' | 'victory' | 'abandoned';
 export class Run {
   readonly rng: Rng;
   room: RoomSpec;
-  carry: Carry = { health: CONFIG.player.maxHealth, maxHealth: CONFIG.player.maxHealth, weapons: ['pulse'], equipped: 0 };
+  carry: Carry = { health: CONFIG.player.maxHealth, maxHealth: CONFIG.player.maxHealth, weapons: ['pulse'], equipped: 0, newest: 0 };
   score = 0;
   kills = 0;
   roomsCleared = 0;
@@ -74,6 +76,7 @@ export class Run {
       maxHealth: player.maxHealth,
       weapons: player.arsenal.ids(),
       equipped: player.arsenal.index,
+      newest: player.arsenal.newest,
     };
     this.score = score.score;
     this.kills = score.kills;
@@ -83,7 +86,7 @@ export class Run {
   applyTo(player: Player, score: ScoreKeeper): void {
     player.health = this.carry.health;
     player.maxHealth = this.carry.maxHealth;
-    player.arsenal.restore(this.carry.weapons, this.carry.equipped);
+    player.arsenal.restore(this.carry.weapons, this.carry.equipped, this.carry.newest);
     score.score = this.score;
     score.kills = this.kills;
   }

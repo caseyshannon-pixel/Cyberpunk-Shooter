@@ -14,6 +14,8 @@ export class Pedestal {
   /** Seconds the player has stood on it without stepping off. */
   hold = 0;
   age = 0;
+  /** Only counts once the player has been off it, so standing where it appears doesn't pick it. */
+  private armed = false;
   readonly radius = RADIUS;
 
   constructor(
@@ -28,8 +30,10 @@ export class Pedestal {
     const r = this.radius + pr;
     if ((px - this.x) ** 2 + (py - this.y) ** 2 > r * r) {
       this.hold = 0;
+      this.armed = true;
       return false;
     }
+    if (!this.armed) return false;
     this.hold += dt;
     return this.hold >= CONFIG.run.takeTime;
   }

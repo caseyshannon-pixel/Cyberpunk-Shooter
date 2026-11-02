@@ -22,6 +22,8 @@ export class Game {
   private fade = 0;
   private fadeDir: -1 | 0 | 1 = 0;
   private pending: (() => GameState) | null = null;
+  /** Focus was lost while fading out; the incoming screen hears about it once it exists. */
+  private focusLostInFade = false;
   private readonly stack: GameState[] = [];
   /** Real seconds since boot (keeps running while paused). */
   time = 0;
@@ -43,7 +45,11 @@ export class Game {
       if (wasInUse) this.top?.onControllerLost?.();
     });
 
-    const lost = () => this.top?.onFocusLost?.();
+    const lost = () => {
+      // The outgoing screen is about to be discarded, so tell the incoming one instead.
+      if (this.fadeDir === 1) this.focusLostInFade = true;
+      else this.top?.onFocusLost?.();
+    };
     window.addEventListener('blur', lost);
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) lost();
@@ -94,8 +100,15 @@ export class Game {
       if (this.fade >= 1 && this.pending) {
         const make = this.pending;
         this.pending = null;
-        this.set(make());
+        // Exit the old screen before building the new one, so its cleanup
+        // can't undo the new screen's setup (e.g. PlayState's mouse mapping).
+        while (this.stack.length) this.pop();
+        this.push(make());
         this.fadeDir = -1;
+        if (this.focusLostInFade) {
+          this.focusLostInFade = false;
+          this.top?.onFocusLost?.();
+        }
       }
     } else if (this.fadeDir === -1) {
       this.fade = Math.max(0, this.fade - dt * speed);

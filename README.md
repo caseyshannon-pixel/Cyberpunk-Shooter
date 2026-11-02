@@ -118,7 +118,7 @@ Pick **ROGUE RUN** on the title screen for a room-to-room run with one life:
 - A run is **3 floors**, each **6 rooms and a Warden boss**. Every room has its own obstacle layout.
 - Clear a room's waves and **reward pedestals** rise in the middle. **Stand on one for half a second** (a ring fills) to take it; the others vanish. You can also skip them.
 - **Doors** open in the walls, labelled with what's behind them (**WEAPON**, **BOSS**, **NEXT FLOOR**). Walk into one to move on; you enter the next room from the opposite wall.
-- Your **HP and weapons carry over** between rooms. Weapons never run out of ammo here; you carry the Pulse Pistol plus up to 2 more (taking a new one swaps out the one in your hands). Beating a floor boss heals 2 HP.
+- Your **HP and weapons carry over** between rooms. Weapons never run out of ammo here; you carry the Pulse Pistol plus up to 2 more. When both slots are full, a new weapon replaces the one in your hands — or, if you're holding the Pistol, the one you took most recently. Standing where a pedestal appears doesn't take it; step off and back on. Beating a floor boss heals 2 HP.
 - Enemies don't drop weapons in a run, and buffs (Overclock, Shield, Health, EMP) drop half as often.
 - Dying, winning, or **Pause → Abandon Run** shows how far you got.
 

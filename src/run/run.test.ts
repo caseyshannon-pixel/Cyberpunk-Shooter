@@ -23,7 +23,7 @@ describe('Run', () => {
     const run = new Run(1280, 1);
     expect(run.room).toMatchObject({ floor: 1, room: 1, type: 'combat', reward: 'weapon', entry: 'bottom' });
     expect(COMBAT_LAYOUTS).toContain(run.room.layout);
-    expect(run.carry).toEqual({ health: 5, maxHealth: 5, weapons: ['pulse'], equipped: 0 });
+    expect(run.carry).toEqual({ health: 5, maxHealth: 5, weapons: ['pulse'], equipped: 0, newest: 0 });
     expect(run.outcome).toBe('active');
   });
 
@@ -102,6 +102,24 @@ describe('Run', () => {
     expect(p2.arsenal.current.id).toBe('spread');
     expect(s2.score).toBe(200);
     expect(s2.kills).toBe(2);
+  });
+
+  it('with the Pistol equipped, the most recently taken weapon is replaced, even across rooms', () => {
+    const run = new Run(1280, 12);
+    const room = (take: 'spread' | 'homing' | 'nova' | 'arc', equip?: number) => {
+      const p = new Player(0, 0, new Arsenal({ infiniteAmmo: true, maxExtra: 2 }));
+      const s = new ScoreKeeper();
+      run.applyTo(p, s);
+      if (equip !== undefined) p.arsenal.index = equip;
+      p.arsenal.add(take);
+      run.captureFrom(p, s);
+      return p;
+    };
+    room('spread'); // [P, spread]
+    room('homing'); // [P, spread, homing]
+    room('nova', 1); // spread equipped → replaced: [P, nova, homing]; nova is newest
+    const p = room('arc', 0); // Pistol equipped → replaces nova (newest), not homing
+    expect(p.arsenal.ids()).toEqual(['pulse', 'arc', 'homing']);
   });
 
   it('debugSkipToBoss jumps to the current floor boss room', () => {

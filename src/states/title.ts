@@ -63,7 +63,8 @@ export class TitleState implements GameState {
         { label: 'CONTROLS', run: () => game.push(new ControlsState(game)) },
         { label: 'SETTINGS', run: () => game.push(new SettingsState(game)) },
       ],
-      { y: VIEW.height / 2 + 56, spacing: 46, size: 24 },
+      // Five entries: start a little higher and tighter so the hint clears the BEST line.
+      { y: VIEW.height / 2 + 36, spacing: 42, size: 24 },
     );
     ATTRACT.forEach((kind) => this.attract.push(new Enemy(kind, 0, 0)));
     this.unsubscribeResize = game.display.onResize(() => {
